@@ -112,6 +112,11 @@ function useProgressSummary() {
 
 type ActiveModal = "preferences" | "shortcuts" | "analytics" | "gallery" | "leaderboard" | "about" | null;
 
+/** Pull a header-icon color slightly toward white. Used for hover, and for a completed daily. */
+function brighterIconColor(color: string): string {
+    return `color-mix(in srgb, ${color} 72%, white)`;
+}
+
 /** One timing for every header affordance, taken from the motion scale. */
 const HEADER_CONTROL_TRANSITION = [
     `transform ${MOTION_DURATION.quick}s ease`,
@@ -314,102 +319,83 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
         };
     const levelInfo = progressSummary ? computeLevelFromXp(progressSummary.totalXp) : null;
 
-    type IconLink =
-        | { label: string; icon: ReactNode; onClick: () => void; disabled?: boolean; accent?: boolean }
-        | { label: string; icon: ReactNode; href: string; isExternal?: boolean };
+    type IconLink = {
+        label: string;
+        icon: ReactNode;
+        color: string;
+        onClick: () => void;
+        disabled?: boolean;
+        accent?: boolean;
+    };
     const dailyLabel = dailyHeaderLabel(dailyAction);
     // Practice actions sit with the wordmark. The level and the app actions
-    // stay on the right, matching the header in the reference layout.
+    // stay on the right. Each glyph has its own color, the way Monkeytype tints
+    // the header icons.
     const brandLinks: IconLink[] = [
         {
             label: dailyLabel,
             icon: <CalendarIcon boxSize={5} />,
+            color: "#c4a7e7",
             onClick: () => dailyAction?.onStart(),
             disabled: !dailyAction || dailyAction.disabled,
             accent: Boolean(dailyAction?.completed),
         },
-        { label: "Leaderboard", icon: <LeaderboardIcon boxSize={5} />, onClick: onOpenLeaderboard },
-        { label: "Achievements", icon: <TrophyIcon boxSize={5} />, onClick: onOpenGallery },
-        { label: "About", icon: <InfoIcon boxSize={5} />, onClick: onOpenAbout },
+        { label: "Leaderboard", icon: <LeaderboardIcon boxSize={5} />, color: "#89b4fa", onClick: onOpenLeaderboard },
+        { label: "Achievements", icon: <TrophyIcon boxSize={5} />, color: "#e2b714", onClick: onOpenGallery },
+        { label: "About", icon: <InfoIcon boxSize={5} />, color: "#f6e7b4", onClick: onOpenAbout },
     ];
     const utilityLinks: IconLink[] = [
-        { label: "Analytics (A)", icon: <AnalyticsIcon boxSize={5} />, onClick: onOpenAnalytics },
-        { label: "Shortcuts", icon: <CommandIcon boxSize={6} />, onClick: onOpenShortcuts },
-        { label: "GitHub", href: "https://github.com/cwklurks/codesprint", icon: <GitHubIcon boxSize={5} />, isExternal: true },
-        { label: "Preferences", icon: <SlidersIcon boxSize={5} />, onClick: onOpenPreferences },
+        { label: "Analytics (A)", icon: <AnalyticsIcon boxSize={5} />, color: "#7dc4e4", onClick: onOpenAnalytics },
+        { label: "Shortcuts", icon: <CommandIcon boxSize={5} />, color: "#fab387", onClick: onOpenShortcuts },
+        { label: "Preferences", icon: <SlidersIcon boxSize={5} />, color: "#b4befe", onClick: onOpenPreferences },
     ];
 
     /**
-     * One circular header control plus its tooltip. Shared by both icon groups
-     * so the two ends of the row stay visually identical.
+     * One solid header glyph plus its tooltip. No chip behind it: the color is
+     * the icon, and hover only lifts that color toward white.
      */
     function renderHeaderIcon(item: IconLink): ReactNode {
         const accent = "accent" in item && item.accent === true;
         const isDisabled = "disabled" in item && item.disabled === true;
+        const hoverColor = brighterIconColor(item.color);
         const linkStyles = {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            w: { base: 8, md: 11 },
-            h: { base: 8, md: 11 },
-            borderRadius: "full",
-            borderWidth: "1px",
-            borderStyle: "solid",
-            borderColor: accent ? "var(--accent)" : "var(--header-border)",
-            bg: "var(--surface)",
-            color: accent ? "var(--accent)" : "var(--header-text)",
+            w: 8,
+            h: 8,
+            p: 0,
+            borderRadius: 0,
+            border: "none",
+            bg: "transparent",
+            color: accent ? hoverColor : item.color,
             opacity: isDisabled ? 0.45 : 1,
             cursor: isDisabled ? "not-allowed" : "pointer",
-            transition: HEADER_CONTROL_TRANSITION,
-            transform: "translateY(0)",
+            textDecoration: "none",
+            transition: `color ${MOTION_DURATION.quick}s ease`,
             _hover: isDisabled
                 ? {}
                 : {
-                    bg: "var(--surface-hover)",
-                    color: accent ? "var(--accent)" : "var(--header-text)",
-                    borderColor: accent ? "var(--accent)" : "var(--border-strong)",
-                    transform: "translateY(-2px)",
+                    bg: "transparent",
+                    color: hoverColor,
+                    textDecoration: "none",
                 },
-            _active: isDisabled ? {} : { bg: "var(--surface-active)", transform: "scale(0.96)" },
+            _active: isDisabled ? {} : { bg: "transparent", color: hoverColor },
             _focusVisible: { boxShadow: "0 0 0 2px var(--focus-ring)" },
         };
 
-        const trigger =
-            "href" in item
-                ? item.isExternal
-                    ? (
-                        <ChakraLink
-                            href={item.href}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label={item.label}
-                            {...linkStyles}
-                        >
-                            {item.icon}
-                        </ChakraLink>
-                    )
-                    : (
-                        <ChakraLink
-                            as={Link}
-                            href={item.href}
-                            aria-label={item.label}
-                            {...linkStyles}
-                        >
-                            {item.icon}
-                        </ChakraLink>
-                    )
-                : (
-                    <chakra.button
-                        type="button"
-                        aria-label={item.label}
-                        onClick={item.onClick}
-                        disabled={isDisabled}
-                        {...linkStyles}
-                    >
-                        {item.icon}
-                    </chakra.button>
-                );
+        const trigger = (
+            <chakra.button
+                type="button"
+                aria-label={item.label}
+                onClick={item.onClick}
+                disabled={isDisabled}
+                {...linkStyles}
+            >
+                {item.icon}
+            </chakra.button>
+        );
 
         return (
             <TooltipRoot key={item.label} positioning={{ strategy: "fixed", placement: "bottom" }}>
@@ -566,139 +552,75 @@ export default AppShell;
 
 function CommandIcon(props: ChakraIconProps) {
     return (
-        <chakra.svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.6}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            {...props}
-        >
-            <path d="M13 5L8.5 13h4.5l-1.5 6 6-8.5h-4.5l1.5-5z" />
+        <chakra.svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+            <path d="M13.2 1.6 3.8 13.4h6.4l-1.5 9 10.6-13.2h-6.6l.5-7.6z" />
         </chakra.svg>
     );
 }
 
 function SlidersIcon(props: ChakraIconProps) {
     return (
-        <chakra.svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            {...props}
-        >
-            <line x1="4" y1="8" x2="20" y2="8" />
-            <line x1="4" y1="16" x2="20" y2="16" />
-            <circle cx="10" cy="8" r="2.4" />
-            <circle cx="15" cy="16" r="2.4" />
+        <chakra.svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+            <rect x="3" y="6.5" width="18" height="2.6" rx="1.3" />
+            <rect x="3" y="14.9" width="18" height="2.6" rx="1.3" />
+            <circle cx="9" cy="7.8" r="2.8" />
+            <circle cx="15.5" cy="16.2" r="2.8" />
         </chakra.svg>
     );
 }
 
 function AnalyticsIcon(props: ChakraIconProps) {
     return (
-        <chakra.svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            {...props}
-        >
-            <line x1="8" y1="18" x2="8" y2="12" />
-            <line x1="12" y1="18" x2="12" y2="4" />
-            <line x1="16" y1="18" x2="16" y2="10" />
+        <chakra.svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+            <rect x="3.5" y="12" width="4.5" height="8" rx="1.2" />
+            <rect x="9.75" y="4" width="4.5" height="16" rx="1.2" />
+            <rect x="16" y="8" width="4.5" height="12" rx="1.2" />
         </chakra.svg>
     );
 }
 
 function CalendarIcon(props: ChakraIconProps) {
     return (
-        <chakra.svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            {...props}
-        >
-            <rect x="3" y="4" width="18" height="18" rx="2" />
-            <path d="M16 2v4" />
-            <path d="M8 2v4" />
-            <path d="M3 10h18" />
+        <chakra.svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+            {/* Rings, header, and page stay separate so the glyph reads as a calendar at 20px. */}
+            <rect x="7" y="1.6" width="2.8" height="6.2" rx="1.4" />
+            <rect x="14.2" y="1.6" width="2.8" height="6.2" rx="1.4" />
+            <rect x="3.6" y="5.8" width="16.8" height="3.2" rx="1.3" />
+            <rect x="3.6" y="12.2" width="16.8" height="9.4" rx="2.2" />
         </chakra.svg>
     );
 }
 
 function InfoIcon(props: ChakraIconProps) {
     return (
-        <chakra.svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            {...props}
-        >
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 16v-4" />
-            <path d="M12 8h.01" />
+        <chakra.svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+            <path
+                fillRule="evenodd"
+                d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm.1 4.3a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8zM10.5 11c0-.5.4-.9.9-.9h.8c.5 0 .9.4.9.9v5.3a.9.9 0 0 1-.9.9h-.8a.9.9 0 0 1-.9-.9V11z"
+            />
         </chakra.svg>
     );
 }
 
 function LeaderboardIcon(props: ChakraIconProps) {
     return (
-        <chakra.svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            {...props}
-        >
-            <path d="M8 6h13" />
-            <path d="M8 12h13" />
-            <path d="M8 18h13" />
-            <path d="M3 6h.01" />
-            <path d="M3 12h.01" />
-            <path d="M3 18h.01" />
+        <chakra.svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+            <circle cx="4.5" cy="6" r="1.7" />
+            <circle cx="4.5" cy="12" r="1.7" />
+            <circle cx="4.5" cy="18" r="1.7" />
+            <rect x="8.4" y="4.6" width="12.2" height="2.8" rx="1.4" />
+            <rect x="8.4" y="10.6" width="12.2" height="2.8" rx="1.4" />
+            <rect x="8.4" y="16.6" width="12.2" height="2.8" rx="1.4" />
         </chakra.svg>
     );
 }
 
 function TrophyIcon(props: ChakraIconProps) {
     return (
-        <chakra.svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            {...props}
-        >
-            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-            <path d="M4 22h16" />
-            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+        <chakra.svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+            <path d="M7 3h10v6.4a5 5 0 0 1-3.1 4.6V16h2.3a1 1 0 0 1 0 2H7.8a1 1 0 0 1 0-2H10v-2a5 5 0 0 1-3-4.6V3z" />
+            <path d="M7 5H5.1A2.1 2.1 0 0 0 3 7.1 2.1 2.1 0 0 0 5.1 9.2H7V5z" />
+            <path d="M17 5h1.9A2.1 2.1 0 0 1 21 7.1a2.1 2.1 0 0 1-2.1 2.1H17V5z" />
         </chakra.svg>
     );
 }
@@ -721,10 +643,3 @@ function FlameIcon(props: ChakraIconProps) {
     );
 }
 
-function GitHubIcon(props: ChakraIconProps) {
-    return (
-        <chakra.svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
-            <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.71c-2.78.61-3.37-1.34-3.37-1.34-.46-1.17-1.12-1.48-1.12-1.48-.91-.62.07-.61.07-.61 1 .07 1.53 1.05 1.53 1.05.9 1.53 2.36 1.09 2.94.84.09-.66.35-1.1.63-1.35-2.22-.26-4.56-1.11-4.56-4.95a3.88 3.88 0 0 1 1-2.68 3.6 3.6 0 0 1 .1-2.65s.84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02a3.6 3.6 0 0 1 .1 2.65 3.88 3.88 0 0 1 1 2.68c0 3.85-2.34 4.68-4.57 4.94.36.31.67.92.67 1.86v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z" />
-        </chakra.svg>
-    );
-}
