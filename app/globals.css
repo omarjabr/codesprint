@@ -201,8 +201,7 @@ main {
         transition: none;
     }
 
-    .app-header,
-    .hero-panel {
+    .app-header {
         transition: none;
     }
 }
@@ -216,10 +215,6 @@ main {
 .cs-complete {
     background: transparent !important;
     opacity: 1 !important;
-}
-
-.cs-focus-active .cs-hero {
-    display: none;
 }
 
 .cs-wrong {
@@ -241,13 +236,12 @@ main {
 .home-stack {
     display: flex;
     flex-direction: column;
-    /* Tight on purpose: the hero and the config row sit above the editor, and
-       the editor has to stay above the fold on a 13" laptop. */
+    /* Tight on purpose: the config row sits above the editor, and the editor
+       has to stay above the fold on a 13" laptop. */
     gap: clamp(16px, 2.4vw, 24px);
 }
 
-.app-header,
-.hero-panel {
+.app-header {
     transition: opacity 0.35s ease, transform 0.35s ease, filter 0.35s ease;
 }
 
@@ -255,13 +249,6 @@ body.cs-focus-active .app-header {
     opacity: 0;
     transform: translateY(-40px);
     filter: blur(12px);
-    pointer-events: none;
-}
-
-body.cs-focus-active .hero-panel {
-    opacity: 0;
-    transform: translateY(-24px);
-    filter: blur(8px);
     pointer-events: none;
 }
 

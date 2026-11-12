@@ -33,6 +33,7 @@ const ShortcutsDrawer = dynamic(() => import("@/components/ShortcutsDrawer"), { 
 const AnalyticsModal = dynamic(() => import("@/components/AnalyticsModal"), { ssr: false });
 const AchievementGallery = dynamic(() => import("@/components/AchievementGallery"), { ssr: false });
 const LeaderboardModal = dynamic(() => import("@/components/LeaderboardModal"), { ssr: false });
+const AboutDialog = dynamic(() => import("@/components/Hero").then((mod) => mod.AboutDialog), { ssr: false });
 
 type OverlayStateValue = {
     /** True while ANY dialog/drawer in the app is open. */
@@ -80,7 +81,7 @@ export function dailyHeaderLabel(action: DailyHeaderAction | null): string {
 
 /**
  * Central "a dialog owns the keyboard" gate. Overlay state is spread across
- * AppShell (preferences/shortcuts/analytics/gallery/leaderboard) and TypingSession
+ * AppShell (preferences/shortcuts/analytics/gallery/leaderboard/about) and TypingSession
  * (AI drills); the typing engine's capture-phase key handler needs a
  * single answer, otherwise keys meant for an open dialog reach the engine.
  */
@@ -108,7 +109,7 @@ function useProgressSummary() {
     return data;
 }
 
-type ActiveModal = "preferences" | "shortcuts" | "analytics" | "gallery" | "leaderboard" | null;
+type ActiveModal = "preferences" | "shortcuts" | "analytics" | "gallery" | "leaderboard" | "about" | null;
 
 /** One timing for every header affordance, taken from the motion scale. */
 const HEADER_CONTROL_TRANSITION = [
@@ -260,6 +261,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         onOpenAnalytics={() => setActiveModal("analytics")}
                         onOpenGallery={() => setActiveModal("gallery")}
                         onOpenLeaderboard={() => setActiveModal("leaderboard")}
+                        onOpenAbout={() => setActiveModal("about")}
                         progressSummary={progressSummary}
                         dailyAction={dailyAction}
                     />
@@ -273,6 +275,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {activeModal === "leaderboard" && (
                     <LeaderboardModal isOpen onOpenChange={({ open }) => { if (!open) close(); }} />
                 )}
+                {activeModal === "about" && <AboutDialog isOpen onClose={close} />}
                 {activeModal === "gallery" && (
                     <AchievementGallery
                         isOpen
@@ -293,11 +296,12 @@ type HeaderProps = {
     onOpenAnalytics: () => void;
     onOpenGallery: () => void;
     onOpenLeaderboard: () => void;
+    onOpenAbout: () => void;
     progressSummary: { totalXp: number; streak: number; unlockedIds: Set<string> } | null;
     dailyAction: DailyHeaderAction | null;
 };
 
-function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGallery, onOpenLeaderboard, progressSummary, dailyAction }: HeaderProps) {
+function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGallery, onOpenLeaderboard, onOpenAbout, progressSummary, dailyAction }: HeaderProps) {
     const prefersReducedMotion = usePrefersReducedMotion();
 
     const headerMotion: MotionProps = prefersReducedMotion
@@ -327,6 +331,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
         { label: "Shortcuts", icon: <CommandIcon boxSize={6} />, onClick: onOpenShortcuts },
         { label: "GitHub", href: "https://github.com/cwklurks/codesprint", icon: <GitHubIcon boxSize={5} />, isExternal: true },
         { label: "Preferences", icon: <SlidersIcon boxSize={5} />, onClick: onOpenPreferences },
+        { label: "About", icon: <InfoIcon boxSize={5} />, onClick: onOpenAbout },
     ];
 
     return (
@@ -613,6 +618,25 @@ function CalendarIcon(props: ChakraIconProps) {
             <path d="M16 2v4" />
             <path d="M8 2v4" />
             <path d="M3 10h18" />
+        </chakra.svg>
+    );
+}
+
+function InfoIcon(props: ChakraIconProps) {
+    return (
+        <chakra.svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            {...props}
+        >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
         </chakra.svg>
     );
 }

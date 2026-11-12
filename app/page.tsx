@@ -1,5 +1,4 @@
 import TypingSession from "@/components/TypingSession";
-import { Hero } from "@/components/Hero";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Box } from "@chakra-ui/react";
 
@@ -10,7 +9,6 @@ import { Box } from "@chakra-ui/react";
 export default function HomePage() {
     return (
         <Box className="home-stack" w="100%">
-            <Hero />
             <ErrorBoundary>
                 <TypingSession />
             </ErrorBoundary>

@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Box, Flex, Text } from "@chakra-ui/react";
+import {
+    DialogBackdrop,
+    DialogBody,
+    DialogContent,
+    DialogHeader,
+    DialogPositioner,
+    DialogRoot,
+    DialogTitle,
+    Flex,
+    Portal,
+    Text,
+} from "@chakra-ui/react";
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import { overlayBackdropProps, overlayDialogProps, overlayHeaderProps } from "@/components/ui/overlay";
 
 /** Languages shipped in `data/snippets-*.json`. */
 const LANGUAGE_COUNT = 4;
@@ -9,10 +22,8 @@ const LANGUAGE_COUNT = 4;
 const SNIPPET_COUNT_LABEL = "~900 snippets";
 
 /**
- * The compact strip above the control bar. The sticky header already carries the
- * wordmark and the daily card already sits between here and the editor, so this
- * is deliberately two lines of type — anything taller pushes the editor below
- * the fold on a 13" laptop.
+ * The about copy that used to sit above the session. It lives in a popup now
+ * so the editor starts higher on the page.
  */
 export function Hero() {
     const [bestWpm, setBestWpm] = useState<number | null>(null);
@@ -59,13 +70,12 @@ export function Hero() {
     ].filter((entry): entry is string => entry !== null);
 
     return (
-        <Box as="section" className="hero-panel" aria-label="About CodeSprint">
-            <Text as="p" fontSize={{ base: "sm", md: "md" }} color="var(--text)" lineHeight={1.5} maxW="76ch">
+        <Flex as="section" direction="column" gap={3} aria-label="About CodeSprint">
+            <Text as="p" fontSize="sm" color="var(--text)" lineHeight={1.5}>
                 Type real source code and get faster at the syntax you actually write.
             </Text>
             <Flex
                 as="p"
-                mt={1.5}
                 align="center"
                 gap={2}
                 flexWrap="wrap"
@@ -85,7 +95,43 @@ export function Hero() {
                     </Flex>
                 ))}
             </Flex>
-        </Box>
+        </Flex>
+    );
+}
+
+type AboutDialogProps = {
+    isOpen: boolean;
+    onClose: () => void;
+};
+
+/** Popup for the about copy. Opened from the header info button. */
+export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
+    return (
+        <DialogRoot
+            open={isOpen}
+            size="sm"
+            placement="center"
+            onOpenChange={({ open }) => {
+                if (!open) onClose();
+            }}
+        >
+            <Portal>
+                <DialogBackdrop {...overlayBackdropProps} />
+                <DialogPositioner>
+                    <DialogContent {...overlayDialogProps}>
+                        <DialogCloseButton />
+                        <DialogHeader {...overlayHeaderProps}>
+                            <DialogTitle fontSize="xl" fontWeight="bold" color="var(--accent)">
+                                About CodeSprint
+                            </DialogTitle>
+                        </DialogHeader>
+                        <DialogBody py={4}>
+                            <Hero />
+                        </DialogBody>
+                    </DialogContent>
+                </DialogPositioner>
+            </Portal>
+        </DialogRoot>
     );
 }
 
