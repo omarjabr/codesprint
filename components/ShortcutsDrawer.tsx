@@ -25,11 +25,12 @@ type ShortcutsDrawerProps = {
 };
 
 /**
- * Wide enough for the longest combo in `KEYBOARD_SHORTCUTS`. Fixing the key
- * column means every description starts on the same x, instead of stepping in
- * and out with the width of each chip.
+ * Caps the key column so every description starts on the same x. 9rem is wide
+ * enough for the longest combo to wrap onto two centered lines
+ * ("Option/Alt +" / "Left/Right") instead of spilling out of the chip. The
+ * track can shrink on a narrow drawer; the label wraps inside the chip.
  */
-const KEY_COLUMN = "104px";
+const KEY_COLUMN = "minmax(0, 9rem)";
 
 export function ShortcutsDrawer({ isOpen, onClose }: ShortcutsDrawerProps) {
     const bodyRef = useRef<HTMLDivElement>(null);
@@ -77,10 +78,14 @@ export function ShortcutsDrawer({ isOpen, onClose }: ShortcutsDrawerProps) {
                                                 fontFamily="var(--font-mono), ui-monospace, Menlo, Consolas, monospace"
                                                 fontWeight={600}
                                                 fontSize="sm"
+                                                lineHeight="1.35"
                                                 textAlign="center"
                                                 color="var(--text)"
                                                 letterSpacing="0.02em"
-                                                whiteSpace="nowrap"
+                                                minW={0}
+                                                maxW="100%"
+                                                whiteSpace="normal"
+                                                overflowWrap="break-word"
                                             >
                                                 {shortcut.combo}
                                             </Box>
