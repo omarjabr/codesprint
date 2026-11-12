@@ -138,15 +138,18 @@ main {
        then floats softly into place — reads as weightless, never snaps. A CSS
        transition already redirects mid-flight on the next keystroke (like
        Monkeytype's cancel-and-retarget), so the target just needs to be written
-       without a frame delay (done synchronously in CodePanel's layout effect). */
-    transition: transform 0.11s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease, height 0.1s ease;
-    animation: cs-caret-blink 1.05s ease-in-out infinite;
+       without a frame delay (done synchronously in CodePanel's layout effect).
+       Opacity is intentionally not transitioned here: the fade keyframes own it,
+       and a transition on the same property makes the blink stutter. */
+    transition: transform 0.11s cubic-bezier(0.22, 1, 0.36, 1), height 0.1s ease;
+    animation: cs-caret-blink 1.4s ease-in-out infinite;
     will-change: transform, opacity;
-    opacity: 0.92;
+    opacity: 1;
     pointer-events: none;
 }
 
 .cs-caret-hidden {
+    animation: none;
     opacity: 0;
 }
 
@@ -159,20 +162,16 @@ main {
     background: var(--error);
 }
 
+/* Symmetric fade, not a held-on blink. The old keyframes stayed solid and then
+   dropped out for ~100ms, which read as a flicker. */
 @keyframes cs-caret-blink {
-
     0%,
-    40% {
+    100% {
         opacity: 1;
     }
 
     50% {
         opacity: 0;
-    }
-
-    60%,
-    100% {
-        opacity: 1;
     }
 }
 
