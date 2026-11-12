@@ -225,10 +225,9 @@ main {
 .home-stack {
     display: flex;
     flex-direction: column;
-    /* Deliberately tight: the hero, the daily card and the control bar all sit
-       above the editor, and the editor has to stay above the fold on a 13"
-       laptop. */
-    gap: clamp(20px, 3vw, 32px);
+    /* Tight on purpose: the hero and the config row sit above the editor, and
+       the editor has to stay above the fold on a 13" laptop. */
+    gap: clamp(16px, 2.4vw, 24px);
 }
 
 .app-header,
@@ -255,66 +254,85 @@ nextjs-portal {
     display: none !important;
 }
 
-/* Session control bar (extracted from inline styles for perf) */
+/* Session config row. Three capsules, centered, in the same arrangement as
+   Monkeytype's test config: a quiet sub-alt group, muted labels, accent on the
+   active one. No card, no rules, no primary button. */
 .session-control-bar {
     display: flex;
     flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-    padding: 10px 14px;
-    border-radius: var(--radius-sm);
-    backdrop-filter: blur(var(--blur-sm));
-    box-shadow: var(--elev-2);
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
-/* Primary line: the filter groups, then the action slot at the far end. */
 .session-control-row {
     display: flex;
     flex-direction: row;
     align-items: center;
-    column-gap: 10px;
-    row-gap: 12px;
+    justify-content: center;
+    column-gap: 0.75rem;
+    row-gap: 0.5rem;
     flex-wrap: wrap;
-}
-
-/* Hairline between control groups, so the pills read as three sets and not one
-   long undifferentiated run. Narrow, the row wraps: the rule turns full width
-   and puts each group on its own line, which is the only way the sets stay
-   legible once they stack. */
-.session-control-divider {
-    display: block;
-    flex: none;
     width: 100%;
-    height: 1px;
-    background: var(--border);
 }
 
-/* The rule that rides with the Start button only reads as a separator beside
-   it, which is the one-line layout. */
-.session-control-divider-inline {
-    display: none;
+.session-control-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    background: var(--bg-muted);
+    border-radius: 0.5rem;
+    padding: 0.2rem;
 }
 
-@media (min-width: 48em) {
-    .session-control-divider {
-        width: 1px;
-        height: auto;
-        align-self: stretch;
-        min-height: 20px;
-    }
-
-    .session-control-divider-inline {
-        display: block;
-    }
+.session-control-option {
+    appearance: none;
+    border: 0;
+    margin: 0;
+    background: transparent;
+    color: var(--text-subtle);
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1;
+    font-weight: 400;
+    padding: 0.45rem 0.7rem;
+    border-radius: 0.35rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.12s ease;
 }
 
-/* Secondary line: session context (review queue, suggested difficulty), which is
-   information rather than control and should not compete with the pills. */
+.session-control-option:hover:not(:disabled),
+.session-control-option[aria-pressed="true"] {
+    color: var(--accent);
+}
+
+.session-control-option:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.session-control-option:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+}
+
+.session-control-bar-terminal .session-control-option {
+    font-family: var(--font-mono), ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+}
+
+/* Session context (review queue, suggested difficulty). One quiet line under
+   the capsules, not a second card. */
 .session-control-meta {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 14px;
     flex-wrap: wrap;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
 }

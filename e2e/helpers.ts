@@ -15,9 +15,17 @@ export type PersistedSession = {
     errorCount: number;
 };
 
-/** The idle "Start" button — `exact` keeps it clear of "Start Daily". */
-export function startButton(page: Page) {
-    return page.getByRole("button", { name: "Start", exact: true });
+/** Config capsules. Mounted until a run is under way. */
+export function sessionControls(page: Page) {
+    return page.locator(".session-control-bar");
+}
+
+/** Header button for today's daily. Matches the done and not-done accessible names. */
+export function dailyChallengeButton(page: Page, dayNumber?: number) {
+    const name = dayNumber === undefined
+        ? /^Daily Challenge #\d+(, done)?$/
+        : new RegExp(`^Daily Challenge #${dayNumber}(, done)?$`);
+    return page.getByRole("button", { name });
 }
 
 export function progressRail(page: Page) {
@@ -75,12 +83,13 @@ export async function waitForStableSnippet(page: Page): Promise<string[]> {
     return readSnippetLines(page);
 }
 
-/** Click Start and wait for the run: the control bar is only mounted while idle. */
+/**
+ * Focus the editor and leave the run idle. The first keystroke starts it.
+ */
 export async function startSession(page: Page): Promise<void> {
-    const start = startButton(page);
-    await expect(start).toBeEnabled();
-    await start.click();
-    await expect(start).toBeHidden();
+    const editor = page.locator(".monaco-editor").first();
+    await expect(editor).toBeVisible();
+    await editor.click();
 }
 
 /**

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { gotoApp } from "./helpers";
 
-test("card and share use today's saved result after reload, retaining the all-time best", async ({ page }) => {
+test("header marks today done after reload and keeps the all-time best in storage", async ({ page }) => {
     await page.addInitScript(() => {
         const date = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
         const today = date(new Date());
@@ -15,10 +15,10 @@ test("card and share use today's saved result after reload, retaining the all-ti
         }));
     });
     await gotoApp(page);
-    await expect(page.getByText("⚡ 90 wpm · 🎯 95%", { exact: false })).toBeVisible();
-    await expect(page.getByText("90", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Daily Challenge #\d+, done$/ })).toBeVisible();
+    await expect(page.getByText("110", { exact: true })).toHaveCount(0);
     await page.reload();
-    await expect(page.getByText("⚡ 90 wpm · 🎯 95%", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Daily Challenge #\d+, done$/ })).toBeVisible();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("codesprint-daily")!).best.wpm)).toBe(110);
 });
 
@@ -32,7 +32,7 @@ test("legacy completion with only yesterday's best never shares that score as to
         }));
     });
     await gotoApp(page);
-    await expect(page.getByText("Done for today. Same snippet for everyone.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Daily Challenge #\d+, done$/ })).toBeVisible();
     await expect(page.getByText("110", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Copy result" })).toHaveCount(0);
 });

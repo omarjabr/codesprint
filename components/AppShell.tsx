@@ -46,6 +46,38 @@ const OverlayStateContext = createContext<OverlayStateValue>({
     setOverlayOpen: () => {},
 });
 
+/** What the header's daily button needs. The session owns the start handler. */
+export type DailyHeaderAction = {
+    dayNumber: number;
+    completed: boolean;
+    disabled: boolean;
+    onStart: () => void;
+};
+
+type DailyHeaderContextValue = {
+    setDailyHeaderAction: (action: DailyHeaderAction | null) => void;
+};
+
+const DailyHeaderContext = createContext<DailyHeaderContextValue>({
+    setDailyHeaderAction: () => {},
+});
+
+/**
+ * Lets the session publish today's daily into the header without lifting the
+ * daily hook out of TypingSession. A no-op outside AppShell, so a session
+ * rendered alone does not crash.
+ */
+export function useDailyHeaderAction(): DailyHeaderContextValue {
+    return useContext(DailyHeaderContext);
+}
+
+/** Accessible name for the header daily button. The comma form is the "done" state. */
+export function dailyHeaderLabel(action: DailyHeaderAction | null): string {
+    if (!action || action.dayNumber <= 0) return "Daily Challenge";
+    if (action.completed) return `Daily Challenge #${action.dayNumber}, done`;
+    return `Daily Challenge #${action.dayNumber}`;
+}
+
 /**
  * Central "a dialog owns the keyboard" gate. Overlay state is spread across
  * AppShell (preferences/shortcuts/analytics/gallery) and TypingSession
@@ -125,7 +157,30 @@ function SkipToContentLink() {
 export function AppShell({ children }: { children: ReactNode }) {
     const [activeModal, setActiveModal] = useState<ActiveModal>(null);
     const [externalOverlays, setExternalOverlays] = useState<ReadonlySet<string>>(() => new Set());
+    const [dailyAction, setDailyActionState] = useState<DailyHeaderAction | null>(null);
     const progressSummary = useProgressSummary();
+
+    // Ignore a republish that doesn't change what the button shows. The click
+    // handler always calls through a ref in the session, so a stale onStart is safe.
+    const setDailyHeaderAction = useCallback((action: DailyHeaderAction | null) => {
+        setDailyActionState((prev) => {
+            if (prev === action) return prev;
+            if (prev === null || action === null) return action;
+            if (
+                prev.dayNumber === action.dayNumber
+                && prev.completed === action.completed
+                && prev.disabled === action.disabled
+            ) {
+                return prev;
+            }
+            return action;
+        });
+    }, []);
+
+    const dailyHeader = useMemo<DailyHeaderContextValue>(
+        () => ({ setDailyHeaderAction }),
+        [setDailyHeaderAction],
+    );
 
     const setOverlayOpen = useCallback((id: string, open: boolean) => {
         setExternalOverlays((prev) => {
@@ -194,6 +249,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <PreferencesProvider>
             <LazyMotion features={domAnimation} strict>
                 <OverlayStateContext.Provider value={overlayState}>
+                <DailyHeaderContext.Provider value={dailyHeader}>
                 {/* body already paints --bg-gradient (app/globals.css); a second
                     full-height layer here just doubles the paint. */}
                 <Flex direction="column" minH="100dvh" color="var(--text)">
@@ -204,8 +260,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                         onOpenAnalytics={() => setActiveModal("analytics")}
                         onOpenGallery={() => setActiveModal("gallery")}
                         progressSummary={progressSummary}
+                        dailyAction={dailyAction}
                     />
-                    <Container as="main" id="main" maxW="1280px" flex="1 1 auto" pt={{ base: 5, md: 8 }} pb={8} px={{ base: 4, lg: 10 }}>
+                    <Container as="main" id="main" maxW="1280px" flex="1 1 auto" pt={{ base: 3, md: 5 }} pb={8} px={{ base: 4, lg: 10 }}>
                         {children}
                     </Container>
                 </Flex>
@@ -219,6 +276,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         unlockedIds={progressSummary?.unlockedIds ?? new Set()}
                     />
                 )}
+                </DailyHeaderContext.Provider>
                 </OverlayStateContext.Provider>
             </LazyMotion>
         </PreferencesProvider>
@@ -231,9 +289,10 @@ type HeaderProps = {
     onOpenAnalytics: () => void;
     onOpenGallery: () => void;
     progressSummary: { totalXp: number; streak: number; unlockedIds: Set<string> } | null;
+    dailyAction: DailyHeaderAction | null;
 };
 
-function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGallery, progressSummary }: HeaderProps) {
+function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGallery, progressSummary, dailyAction }: HeaderProps) {
     const prefersReducedMotion = usePrefersReducedMotion();
 
     const headerMotion: MotionProps = prefersReducedMotion
@@ -246,9 +305,17 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
     const levelInfo = progressSummary ? computeLevelFromXp(progressSummary.totalXp) : null;
 
     type IconLink =
-        | { label: string; icon: ReactNode; onClick: () => void }
+        | { label: string; icon: ReactNode; onClick: () => void; disabled?: boolean; accent?: boolean }
         | { label: string; icon: ReactNode; href: string; isExternal?: boolean };
+    const dailyLabel = dailyHeaderLabel(dailyAction);
     const iconLinks: IconLink[] = [
+        {
+            label: dailyLabel,
+            icon: <CalendarIcon boxSize={5} />,
+            onClick: () => dailyAction?.onStart(),
+            disabled: !dailyAction || dailyAction.disabled,
+            accent: Boolean(dailyAction?.completed),
+        },
         { label: "Achievements", icon: <TrophyIcon boxSize={5} />, onClick: onOpenGallery },
         { label: "Analytics (A)", icon: <AnalyticsIcon boxSize={5} />, onClick: onOpenAnalytics },
         { label: "Shortcuts", icon: <CommandIcon boxSize={6} />, onClick: onOpenShortcuts },
@@ -292,13 +359,23 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                         <Flex
                             align="center"
                             justify="flex-end"
-                            gap={{ base: 1.5, md: 2 }}
+                            gap={{ base: 1, md: 2 }}
                             flexWrap="nowrap"
                             flex="0 1 auto"
                             minW={0}
                         >
-                            {progressSummary && (
-                                <Flex align="center" gap={3} mr={{ base: 0.5, md: 2 }} flexShrink={0}>
+                            {progressSummary && (progressSummary.streak >= 1 || levelInfo) && (
+                                // On a phone the level meter is already hidden. An empty
+                                // cluster still carried a margin and pushed the icon row
+                                // onto a second line, so the cluster itself stands down
+                                // until there is a streak to show.
+                                <Flex
+                                    align="center"
+                                    gap={3}
+                                    mr={{ base: 0.5, md: 2 }}
+                                    flexShrink={0}
+                                    display={progressSummary.streak >= 1 ? "flex" : { base: "none", md: "flex" }}
+                                >
                                     {progressSummary.streak >= 1 && (
                                         <Flex
                                             align="center"
@@ -358,30 +435,38 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                     )}
                                 </Flex>
                             )}
-                            <Flex gap={{ base: 1, md: 2 }} align="center" flexWrap="nowrap" flexShrink={0}>
+                            <Flex gap={{ base: 0.5, md: 2 }} align="center" flexWrap="nowrap" flexShrink={0}>
                                 {iconLinks.map((item) => {
+                                    const accent = "accent" in item && item.accent === true;
+                                    const isDisabled = "disabled" in item && item.disabled === true;
                                     const linkStyles = {
                                         display: "inline-flex",
                                         alignItems: "center",
                                         justifyContent: "center",
                                         flexShrink: 0,
-                                        w: { base: 9, md: 11 },
-                                        h: { base: 9, md: 11 },
+                                        w: { base: 8, md: 11 },
+                                        h: { base: 8, md: 11 },
                                         borderRadius: "full",
-                                        border: "1px solid var(--header-border)",
+                                        borderWidth: "1px",
+                                        borderStyle: "solid",
+                                        borderColor: accent ? "var(--accent)" : "var(--header-border)",
                                         bg: "var(--surface)",
-                                        color: "var(--header-text)",
+                                        color: accent ? "var(--accent)" : "var(--header-text)",
+                                        opacity: isDisabled ? 0.45 : 1,
+                                        cursor: isDisabled ? "not-allowed" : "pointer",
                                         transition: HEADER_CONTROL_TRANSITION,
                                         transform: "translateY(0)",
-                                        _hover: {
-                                            bg: "var(--surface-hover)",
-                                            color: "var(--header-text)",
-                                            borderColor: "var(--border-strong)",
-                                            transform: "translateY(-2px)",
-                                        },
-                                        _active: { bg: "var(--surface-active)", transform: "scale(0.96)" },
+                                        _hover: isDisabled
+                                            ? {}
+                                            : {
+                                                bg: "var(--surface-hover)",
+                                                color: accent ? "var(--accent)" : "var(--header-text)",
+                                                borderColor: accent ? "var(--accent)" : "var(--border-strong)",
+                                                transform: "translateY(-2px)",
+                                            },
+                                        _active: isDisabled ? {} : { bg: "var(--surface-active)", transform: "scale(0.96)" },
                                         _focusVisible: { boxShadow: "0 0 0 2px var(--focus-ring)" },
-                                    } as const;
+                                    };
 
                                     const trigger =
                                         "href" in item
@@ -412,6 +497,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                                     type="button"
                                                     aria-label={item.label}
                                                     onClick={item.onClick}
+                                                    disabled={isDisabled}
                                                     {...linkStyles}
                                                 >
                                                     {item.icon}
@@ -444,10 +530,10 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                 borderRadius="full"
                                 px={{ base: 0, md: 5 }}
                                 // Squares up with the icon buttons beside it at
-                                // both sizes (36px on phones, 44px from md).
-                                w={{ base: 9, md: "auto" }}
-                                h={{ base: 9, md: 11 }}
-                                minW={{ base: 9, md: "auto" }}
+                                // both sizes (32px on phones, 44px from md).
+                                w={{ base: 8, md: "auto" }}
+                                h={{ base: 8, md: 11 }}
+                                minW={{ base: 8, md: "auto" }}
                                 flexShrink={0}
                                 variant="outline"
                                 borderColor="var(--border)"
@@ -528,6 +614,26 @@ function AnalyticsIcon(props: ChakraIconProps) {
             <line x1="8" y1="18" x2="8" y2="12" />
             <line x1="12" y1="18" x2="12" y2="4" />
             <line x1="16" y1="18" x2="16" y2="10" />
+        </chakra.svg>
+    );
+}
+
+function CalendarIcon(props: ChakraIconProps) {
+    return (
+        <chakra.svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            {...props}
+        >
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4" />
+            <path d="M8 2v4" />
+            <path d="M3 10h18" />
         </chakra.svg>
     );
 }

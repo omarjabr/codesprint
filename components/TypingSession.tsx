@@ -8,18 +8,16 @@ import dynamic from "next/dynamic";
 import GapBufferVisualizer from "@/components/GapBufferVisualizer";
 import LiveStats from "@/components/LiveStats";
 
-import { useOverlayState } from "@/components/AppShell";
+import { useDailyHeaderAction, useOverlayState } from "@/components/AppShell";
 import { SessionControlBar } from "@/components/session/SessionControlBar";
 import { SessionTopBar } from "@/components/session/SessionTopBar";
 import { CountdownOverlay } from "@/components/session/CountdownOverlay";
-import { DailyChallengeCard } from "@/components/daily/DailyChallengeCard";
 
 import { usePrefersReducedMotion } from "@/lib/motion";
 import { usePreferences } from "@/lib/preferences";
 import { getPanelMotion, getSessionSwapMotion } from "@/lib/motion-config";
 import { getLayoutGap } from "@/lib/session-styles";
 import { estimateEditorHeight } from "@/lib/code-panel";
-import { getDailyResult } from "@/lib/daily-store";
 
 import { useTypingEngine } from "@/hooks/useTypingEngine";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
@@ -60,6 +58,7 @@ export default function TypingSession() {
     const [difficultyTransition, setDifficultyTransition] = useState<DifficultyTransition | undefined>(undefined);
     const panelContainerRef = useRef<HTMLDivElement | null>(null);
     const { isOverlayOpen, setOverlayOpen } = useOverlayState();
+    const { setDailyHeaderAction } = useDailyHeaderAction();
 
     const openLeaderboard = useCallback(() => setIsLeaderboardOpen(true), []);
     const closeLeaderboard = useCallback(() => setIsLeaderboardOpen(false), []);
@@ -314,15 +313,6 @@ export default function TypingSession() {
     const focusEditor = focus.focusEditor;
     const engineStart = engine.start;
 
-    // Handlers
-    const handleStart = useCallback(() => {
-        dailyRunDateRef.current = null;
-        pendingDailyStartRef.current = null;
-        enableEditorFocus();
-        engineStart();
-        focusEditor();
-    }, [enableEditorFocus, engineStart, focusEditor]);
-
     // Start (or re-practice) today's Daily Challenge. setSnippet updates state
     // asynchronously, so defer engine.start() until the daily snippet is active.
     const handleStartDaily = useCallback(() => {
@@ -347,6 +337,29 @@ export default function TypingSession() {
         engineStart();
         focusEditor();
     }, [controls.snippet.id, enableEditorFocus, engineStart, focusEditor]);
+
+    // The header button lives outside this tree. Keep the click handler in a ref
+    // so publishing the label does not re-render the header on every keystroke.
+    const startDailyRef = useRef(handleStartDaily);
+    startDailyRef.current = handleStartDaily;
+    const dailyBlocked = daily.dailySnippet === null
+        || engine.phase === "running"
+        || engine.phase === "countdown";
+
+    useEffect(() => {
+        setDailyHeaderAction({
+            dayNumber: daily.dayNumber,
+            completed: daily.completed,
+            disabled: dailyBlocked,
+            onStart: () => {
+                startDailyRef.current();
+            },
+        });
+    }, [daily.dayNumber, daily.completed, dailyBlocked, setDailyHeaderAction]);
+
+    useEffect(() => {
+        return () => setDailyHeaderAction(null);
+    }, [setDailyHeaderAction]);
 
     const handleNextProblem = useCallback(() => {
         enableEditorFocus();
@@ -383,8 +396,8 @@ export default function TypingSession() {
                     >
                         {/* Tighter between the stacked blocks on phones: every
                             pixel here is a pixel of editor above the fold. */}
-                        <Box display="flex" flexDirection="column" gap={{ base: 5, md: 8 }}>
-                            {/* Control Bar (hidden during focus) */}
+                        <Box display="flex" flexDirection="column" gap={{ base: 4, md: 6 }}>
+                            {/* Config row (hidden during a run). Typing starts the session. */}
                             {!focusActive && (
                                 <SessionControlBar
                                     language={controls.language}
@@ -393,7 +406,6 @@ export default function TypingSession() {
                                     onLengthChange={controls.setLengthPreference}
                                     surfaceStyle={storedSurfaceStyle}
                                     onSurfaceChange={persistSurfaceStyle}
-                                    onStart={handleStart}
                                     phase={engine.phase}
                                     disabled={controlsDisabled}
                                     isTerminalMode={isTerminalMode}
@@ -401,21 +413,6 @@ export default function TypingSession() {
                                     dueCount={sr.dueCount}
                                     suggestedDifficulty={adaptive.suggestedDifficulty}
                                     onOpenAIDrill={openDrillPanel}
-                                />
-                            )}
-
-                            {/* Daily Challenge (idle only) */}
-                            {engine.phase === "idle" && (
-                                <DailyChallengeCard
-                                    dateStr={daily.today}
-                                    dayNumber={daily.dayNumber}
-                                    streak={daily.streak}
-                                    completed={daily.completed}
-                                    language={daily.dailySnippet?.language ?? controls.language}
-                                    available={daily.dailySnippet !== null}
-                                    todaysResult={getDailyResult(daily.progress, daily.today)}
-                                    onStart={handleStartDaily}
-                                    disabled={controlsDisabled}
                                 />
                             )}
 

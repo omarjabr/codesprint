@@ -1,9 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
 
 import {
+    dailyChallengeButton,
     gotoApp,
     resultWpm,
-    startButton,
+    sessionControls,
     typeSnippetLines,
     waitForStableSnippet,
 } from "./helpers";
@@ -20,14 +21,12 @@ async function startDaily(page: Page): Promise<string[]> {
     await waitForStableSnippet(page);
 
     // Disabled until the daily pool chunk resolves.
-    const start = page.getByRole("button", { name: /^(Start Daily|Practice again)$/ });
+    const start = dailyChallengeButton(page);
     await expect(start).toBeEnabled();
     await start.click();
 
-    // The daily card and the control bar are both idle-only, so the pair going
-    // away is the run actually being under way.
-    await expect(start).toBeHidden();
-    await expect(startButton(page)).toBeHidden();
+    // The config row unmounts once the run is under way.
+    await expect(sessionControls(page)).toBeHidden();
 
     return waitForStableSnippet(page);
 }
@@ -37,7 +36,7 @@ test.describe("Daily challenge", () => {
         const dayNumber = expectedDailyNumber();
 
         await gotoApp(page);
-        await expect(page.getByText(`Daily Challenge #${dayNumber}`)).toBeVisible();
+        await expect(dailyChallengeButton(page, dayNumber)).toBeVisible();
 
         const firstRun = await startDaily(page);
         expect(firstRun.join("\n").length).toBeGreaterThan(0);
@@ -51,7 +50,7 @@ test.describe("Daily challenge", () => {
 
         await page.reload();
         await expect(page.locator(".monaco-editor").first()).toBeVisible({ timeout: 30000 });
-        await expect(page.getByText("Done for today. Same snippet for everyone.")).toBeVisible();
+        await expect(page.getByRole("button", { name: `Daily Challenge #${dayNumber}, done`, exact: true })).toBeVisible();
 
         // Date-seeded: the same day serves the same snippet however often it is opened.
         const secondRun = await startDaily(page);

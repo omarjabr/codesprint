@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-import { completeSession, gotoApp, resultWpm, startButton } from "./helpers";
+import { completeSession, gotoApp, resultWpm, sessionControls } from "./helpers";
 
 const NOW_PRACTICING = /Now practicing:/;
 
@@ -15,7 +15,7 @@ test.describe("Result screen", () => {
         await page.keyboard.press("Tab");
 
         await expect(resultWpm(page)).toHaveCount(0);
-        await expect(startButton(page)).toBeVisible();
+        await expect(sessionControls(page)).toBeVisible();
         await expect(page.getByText(NOW_PRACTICING)).not.toHaveText(firstProblem);
     });
 

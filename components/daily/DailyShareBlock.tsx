@@ -20,9 +20,8 @@ export interface DailyShareBlockProps {
 const COPIED_RESET_MS = 1800;
 
 /**
- * Streak flame. Lives here because both the daily card and the result screen
- * (which already import this module) need the same mark, and the app renders
- * icons as inline SVG rather than emoji.
+ * Streak flame for the result screen. The app renders icons as inline SVG
+ * rather than emoji.
  */
 export function StreakFlame({ size = 16 }: { size?: number }) {
     return (

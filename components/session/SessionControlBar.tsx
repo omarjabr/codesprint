@@ -1,7 +1,7 @@
 "use client";
 
+import { type ReactNode } from "react";
 import {
-    Button,
     Flex,
     Text,
     TooltipRoot,
@@ -11,9 +11,8 @@ import {
     chakra,
 } from "@chakra-ui/react";
 import type { IconProps as ChakraIconProps } from "@chakra-ui/react";
-import { AnimatePresence, m } from "framer-motion";
-import { getPillButtonStyles, getStartButtonStyles, SESSION_CSS_VARS } from "@/lib/session-styles";
-import { getControlsMotion, getStartButtonMotion } from "@/lib/motion-config";
+import { m } from "framer-motion";
+import { getControlsMotion } from "@/lib/motion-config";
 import type { SupportedLanguage } from "@/lib/snippets";
 import type { LengthFilter } from "@/hooks/useSessionControls";
 import type { Phase } from "@/hooks/useFocusManagement";
@@ -38,8 +37,6 @@ export interface SessionControlBarProps {
     surfaceStyle: SurfaceStyle;
     /** Callback when surface style changes */
     onSurfaceChange: (style: SurfaceStyle) => void;
-    /** Callback when start button is clicked */
-    onStart: () => void;
     /** Current phase */
     phase: Phase;
     /** Whether controls are disabled */
@@ -75,24 +72,57 @@ const SURFACE_OPTIONS: Array<{ value: SurfaceStyle; label: string }> = [
     { value: "immersive", label: "Immersive" },
 ];
 
+interface ControlOptionProps {
+    label: string;
+    pressed?: boolean;
+    disabled?: boolean;
+    /** Shown on hover. Omitted for options whose label is already the whole meaning. */
+    helper?: string;
+    onClick: () => void;
+    children?: ReactNode;
+}
+
 /**
- * Between the filter groups this is a full-width hairline while the bar is
- * stacked and a vertical rule once it fits on one line (app/globals.css). The
- * `inline` variant rides with the Start button and only exists in the wide
- * layout.
+ * One item inside a config capsule. Active state is accent-colored text, the
+ * same treatment Monkeytype uses for the selected mode.
  */
-function Divider({ inline = false }: { inline?: boolean }) {
+function ControlOption({ label, pressed, disabled, helper, onClick, children }: ControlOptionProps) {
+    const button = (
+        <chakra.button
+            type="button"
+            className="session-control-option"
+            aria-pressed={pressed}
+            disabled={disabled}
+            onClick={onClick}
+        >
+            {children ?? label}
+        </chakra.button>
+    );
+
+    if (!helper) return button;
+
     return (
-        <span
-            className={inline ? "session-control-divider session-control-divider-inline" : "session-control-divider"}
-            aria-hidden="true"
-        />
+        <TooltipRoot>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipPositioner>
+                <TooltipContent
+                    bg="var(--surface)"
+                    color="var(--text)"
+                    border="1px solid var(--border)"
+                    fontSize="xs"
+                    px={2}
+                    py={1}
+                >
+                    {helper}
+                </TooltipContent>
+            </TooltipPositioner>
+        </TooltipRoot>
     );
 }
 
 /**
- * Control bar with language, length, surface style selectors and start button
- * Only visible when not in focus mode (running state)
+ * Language, length, and surface, as three centered capsules. A run starts on
+ * the first keystroke, so this row has no Start button.
  */
 export function SessionControlBar({
     language,
@@ -101,7 +131,6 @@ export function SessionControlBar({
     onLengthChange,
     surfaceStyle,
     onSurfaceChange,
-    onStart,
     phase,
     disabled,
     isTerminalMode,
@@ -110,13 +139,9 @@ export function SessionControlBar({
     suggestedDifficulty,
     onOpenAIDrill,
 }: SessionControlBarProps) {
-    const { panelGlass, border } = SESSION_CSS_VARS;
     const controlsMotion = getControlsMotion(prefersReducedMotion);
-    const startButtonMotion = getStartButtonMotion(prefersReducedMotion);
 
-    // AI Drills
     const { preferences } = usePreferences();
-    const startButtonStyles = getStartButtonStyles(isTerminalMode, preferences.theme);
     const ai = useAIDrills(preferences);
     const showAIDrill = preferences.aiDrillsEnabled && getActiveProvider() !== null &&
         phase !== "running" && phase !== "countdown";
@@ -124,127 +149,70 @@ export function SessionControlBar({
 
     const hasDue = dueCount !== undefined && dueCount > 0;
     const showMetaRow = hasDue || Boolean(suggestedDifficulty);
+    const barClass = isTerminalMode
+        ? "session-control-bar session-control-bar-terminal"
+        : "session-control-bar";
 
     return (
-        <m.div
-            className="session-control-bar"
-            style={{
-                background: panelGlass,
-                border: `1px solid ${border}`,
-            }}
-            {...controlsMotion}
-            layout
-        >
+        <m.div className={barClass} {...controlsMotion}>
             <div className="session-control-row">
-                {/* Filters: language, length, appearance — one visual band */}
-                <Flex gap={2} flexWrap="wrap" align="center" role="group" aria-label="Language">
+                <div className="session-control-group" role="group" aria-label="Language">
                     {LANGUAGE_OPTIONS.map((option) => (
-                        <Button
+                        <ControlOption
                             key={option.value}
-                            {...getPillButtonStyles(language === option.value, isTerminalMode)}
-                            aria-pressed={language === option.value}
+                            label={option.label}
+                            pressed={language === option.value}
+                            disabled={disabled}
                             onClick={() => onLanguageChange(option.value)}
-                            disabled={disabled}
-                        >
-                            {option.label}
-                        </Button>
+                        />
                     ))}
-                </Flex>
+                </div>
 
-                <Divider />
-
-                <Flex gap={2} flexWrap="wrap" align="center" role="group" aria-label="Snippet length">
+                <div className="session-control-group" role="group" aria-label="Snippet length">
                     {LENGTH_OPTIONS.map((option) => (
-                        <TooltipRoot key={option.value}>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    {...getPillButtonStyles(lengthPreference === option.value, isTerminalMode)}
-                                    aria-pressed={lengthPreference === option.value}
-                                    onClick={() => onLengthChange(option.value)}
-                                    disabled={disabled}
-                                >
-                                    {option.label}
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipPositioner>
-                                <TooltipContent
-                                    bg="var(--surface)"
-                                    color="var(--text)"
-                                    border="1px solid var(--border)"
-                                    fontSize="xs"
-                                    px={2}
-                                    py={1}
-                                >
-                                    {option.helper}
-                                </TooltipContent>
-                            </TooltipPositioner>
-                        </TooltipRoot>
-                    ))}
-                </Flex>
-
-                <Divider />
-
-                <Flex gap={2} flexWrap="wrap" align="center" role="group" aria-label="Appearance">
-                    {SURFACE_OPTIONS.map((option) => (
-                        <Button
+                        <ControlOption
                             key={option.value}
-                            {...getPillButtonStyles(surfaceStyle === option.value, isTerminalMode)}
-                            aria-pressed={surfaceStyle === option.value}
-                            onClick={() => onSurfaceChange(option.value)}
+                            label={option.label}
+                            helper={option.helper}
+                            pressed={lengthPreference === option.value}
                             disabled={disabled}
-                        >
-                            {option.label}
-                        </Button>
+                            onClick={() => onLengthChange(option.value)}
+                        />
                     ))}
-                </Flex>
+                </div>
 
-                {/* Actions live in their own slot at the far end of the bar */}
-                <Flex gap={3} align="center" ml="auto" flexWrap="wrap">
-                    {showAIDrill && (
-                        <TooltipRoot>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    {...getPillButtonStyles(false, isTerminalMode)}
-                                    onClick={onOpenAIDrill}
-                                    disabled={!rateLimit.allowed}
-                                    gap={1.5}
-                                >
-                                    <BoltIcon boxSize={3.5} />
-                                    AI
-                                    <Text as="span" fontSize="xs" color="var(--text-subtle)" fontVariantNumeric="tabular-nums">
-                                        {ai.remainingToday}
-                                    </Text>
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipPositioner>
-                                <TooltipContent
-                                    bg="var(--surface)"
-                                    color="var(--text)"
-                                    border="1px solid var(--border)"
-                                    fontSize="xs"
-                                    px={2}
-                                    py={1}
-                                >
-                                    {!rateLimit.allowed ? rateLimit.reason : "Generate AI drill (Shift+A on the result screen)"}
-                                </TooltipContent>
-                            </TooltipPositioner>
-                        </TooltipRoot>
-                    )}
+                <div className="session-control-group" role="group" aria-label="Appearance">
+                    {SURFACE_OPTIONS.map((option) => (
+                        <ControlOption
+                            key={option.value}
+                            label={option.label}
+                            pressed={surfaceStyle === option.value}
+                            disabled={disabled}
+                            onClick={() => onSurfaceChange(option.value)}
+                        />
+                    ))}
+                </div>
 
-                    <AnimatePresence>
-                        {phase === "idle" && (
-                            <m.div {...startButtonMotion} layout style={{ display: "inline-flex" }}>
-                                <Divider inline />
-                                <Button onClick={onStart} {...startButtonStyles} ml={3}>
-                                    Start
-                                </Button>
-                            </m.div>
-                        )}
-                    </AnimatePresence>
-                </Flex>
+                {showAIDrill && (
+                    <div className="session-control-group" role="group" aria-label="AI drills">
+                        <ControlOption
+                            label="AI"
+                            helper={!rateLimit.allowed ? rateLimit.reason : "Generate AI drill (Shift+A on the result screen)"}
+                            disabled={!rateLimit.allowed}
+                            onClick={() => onOpenAIDrill?.()}
+                        >
+                            <Flex as="span" align="center" gap={1.5}>
+                                <BoltIcon boxSize={3.5} />
+                                AI
+                                <Text as="span" fontSize="xs" color="var(--text-subtle)" fontVariantNumeric="tabular-nums">
+                                    {ai.remainingToday}
+                                </Text>
+                            </Flex>
+                        </ControlOption>
+                    </div>
+                )}
             </div>
 
-            {/* Secondary line: session context, not controls */}
             {showMetaRow && (
                 <div className="session-control-meta">
                     {hasDue && (

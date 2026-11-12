@@ -64,7 +64,7 @@ export function useDaily(): UseDailyReturn {
     }, []);
 
     // The pool is loaded on demand now, so the snippet arrives asynchronously.
-    // Null until it resolves; the daily card renders its unavailable state.
+    // Null until it resolves; the header button stays disabled until then.
     const [loadedDaily, setLoadedDaily] = useState<{ date: string; snippet: Snippet | null } | null>(null);
     const dailySnippet = loadedDaily?.date === today ? loadedDaily.snippet : null;
 
@@ -84,8 +84,8 @@ export function useDaily(): UseDailyReturn {
 
         // The pool pulls in all four corpora (~693 KB of JSON). Nothing on the
         // first screen needs it, and on the critical path it competes with Monaco
-        // for bandwidth and main-thread time — so wait for idle. The card renders
-        // its loading state meanwhile.
+        // for bandwidth and main-thread time — so wait for idle. The header
+        // button stays disabled meanwhile.
         const canIdle = "requestIdleCallback" in window;
         const handle = canIdle
             ? window.requestIdleCallback(load, { timeout: 3000 })
