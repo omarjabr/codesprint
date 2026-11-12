@@ -191,8 +191,13 @@ main {
     }
 }
 
+/* Unread tokens keep their syntax color and drop in opacity. Typed tokens
+   (.cs-complete) stay on that same color at full strength. */
+.monaco-editor .view-line span[class*="mtk"] {
+    opacity: var(--untyped-opacity, 0.45);
+}
+
 .cs-complete {
-    color: var(--text) !important;
     background: transparent !important;
     opacity: 1 !important;
 }
@@ -204,6 +209,7 @@ main {
 .cs-wrong {
     color: var(--error) !important;
     background: transparent !important;
+    opacity: 1 !important;
     text-decoration: underline !important;
     text-decoration-color: var(--error);
     text-decoration-thickness: 2px;

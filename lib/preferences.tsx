@@ -21,6 +21,7 @@ import {
     computeCaretHeight,
     sanitizePreferences,
 } from "@/lib/preferences-core";
+import { untypedOpacity } from "@/lib/contrast";
 
 type PreferencesContextValue = {
     preferences: PreferencesState;
@@ -89,6 +90,8 @@ function applyTheme(preferences: PreferencesState) {
     root.style.setProperty("--terminal-bg", tokens.terminalBg);
     root.style.setProperty("--caret-width", `${preferences.caretWidth}px`);
     root.style.setProperty("--caret-height", `${computeCaretHeight(preferences.fontSize)}px`);
+    // Unread code fades; typed code keeps the token color at full strength.
+    root.style.setProperty("--untyped-opacity", String(untypedOpacity(tokens.text, backgroundColor)));
 }
 
 function subscribe(callback: () => void) {

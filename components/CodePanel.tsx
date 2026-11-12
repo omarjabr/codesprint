@@ -28,7 +28,6 @@ import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
 import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution";
 
 import { estimateEditorHeight, getCompletedRanges, getPreviewIndex, hexToRgb, toMonacoColor } from "@/lib/code-panel";
-import { ghostTextColor, minAlphaForContrast } from "@/lib/contrast";
 import {
     CARET_BLINK_TIMEOUT_MS,
     LINE_HEIGHT_MULTIPLIER,
@@ -227,13 +226,9 @@ function CodePanel({
         const luminance = 0.299 * bgRgb[0] + 0.587 * bgRgb[1] + 0.114 * bgRgb[2];
         const isLight = luminance > 128;
 
-        // Dim the unread template, but keep it legible. The alpha is the lowest
-        // that still clears WCAG 3:1 for this theme; a flat 0.25 disappeared on
-        // low-contrast palettes. ghostTextColor bakes that mix into a solid hex
-        // because Monaco drops alpha on token colors, which left the template
-        // at full strength and identical to text the user had already typed.
-        const untypedAlpha = minAlphaForContrast(theme.text, theme.bg, 3.0);
-        const fade = (color: string) => ghostTextColor(color, theme.bg, untypedAlpha);
+        // Full syntax colors. Unread code is faded in CSS via --untyped-opacity
+        // so typed characters can keep these colors instead of turning into --text.
+        const paint = (color: string): string => (color.startsWith("#") ? color.slice(0, 7) : color);
 
         const themeName = `codesprint-${preferences.theme}`;
         try {
@@ -241,35 +236,35 @@ function CodePanel({
                 base: isLight ? "vs" : "vs-dark",
                 inherit: true,
                 rules: [
-                    { token: "", foreground: fade(theme.text).replace("#", "") },
-                    { token: "comment", foreground: fade(theme.textSubtle).replace("#", "") },
+                    { token: "", foreground: paint(theme.text).replace("#", "") },
+                    { token: "comment", foreground: paint(theme.textSubtle).replace("#", "") },
                     ...(syntaxHighlighting === "partial"
                         ? [
-                            { token: "identifier", foreground: fade(theme.text).replace("#", "") },
-                            { token: "string", foreground: fade(theme.text).replace("#", "") },
-                            { token: "delimiter", foreground: fade(theme.text).replace("#", "") },
-                            { token: "number", foreground: fade(theme.text).replace("#", "") },
-                            { token: "regexp", foreground: fade(theme.text).replace("#", "") },
-                            { token: "keyword", foreground: fade(theme.accent).replace("#", "") },
-                            { token: "type", foreground: fade(theme.accent).replace("#", "") },
+                            { token: "identifier", foreground: paint(theme.text).replace("#", "") },
+                            { token: "string", foreground: paint(theme.text).replace("#", "") },
+                            { token: "delimiter", foreground: paint(theme.text).replace("#", "") },
+                            { token: "number", foreground: paint(theme.text).replace("#", "") },
+                            { token: "regexp", foreground: paint(theme.text).replace("#", "") },
+                            { token: "keyword", foreground: paint(theme.accent).replace("#", "") },
+                            { token: "type", foreground: paint(theme.accent).replace("#", "") },
                         ]
                         : [
-                            { token: "keyword", foreground: fade(theme.accent).replace("#", "") },
-                            { token: "type", foreground: fade(theme.accent).replace("#", "") },
-                            { token: "identifier", foreground: fade(theme.text).replace("#", "") },
-                            { token: "string", foreground: fade(theme.accent).replace("#", "") },
-                            { token: "number", foreground: fade(theme.accent).replace("#", "") },
-                            { token: "regexp", foreground: fade(theme.accent).replace("#", "") },
-                            { token: "delimiter", foreground: fade(theme.textSubtle).replace("#", "") },
-                            { token: "delimiter.html", foreground: fade(theme.textSubtle).replace("#", "") },
-                            { token: "tag", foreground: fade(theme.accent).replace("#", "") },
-                            { token: "attribute.name", foreground: fade(theme.text).replace("#", "") },
-                            { token: "attribute.value", foreground: fade(theme.accent).replace("#", "") },
+                            { token: "keyword", foreground: paint(theme.accent).replace("#", "") },
+                            { token: "type", foreground: paint(theme.accent).replace("#", "") },
+                            { token: "identifier", foreground: paint(theme.text).replace("#", "") },
+                            { token: "string", foreground: paint(theme.accent).replace("#", "") },
+                            { token: "number", foreground: paint(theme.accent).replace("#", "") },
+                            { token: "regexp", foreground: paint(theme.accent).replace("#", "") },
+                            { token: "delimiter", foreground: paint(theme.textSubtle).replace("#", "") },
+                            { token: "delimiter.html", foreground: paint(theme.textSubtle).replace("#", "") },
+                            { token: "tag", foreground: paint(theme.accent).replace("#", "") },
+                            { token: "attribute.name", foreground: paint(theme.text).replace("#", "") },
+                            { token: "attribute.value", foreground: paint(theme.accent).replace("#", "") },
                         ]),
                 ],
                 colors: {
                     "editor.background": "#00000000",
-                    "editor.foreground": fade(theme.text),
+                    "editor.foreground": paint(theme.text),
                     "editorCursor.foreground": toMonacoColor(theme.caret),
                     "editor.lineHighlightBackground": "#00000000",
                     "editorLineNumber.foreground": toMonacoColor(theme.textSubtle),

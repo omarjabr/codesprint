@@ -70,6 +70,20 @@ const MAX_UNTYPED_ALPHA = 0.7;
 const ALPHA_STEP = 0.01;
 
 /**
+ * Opacity for code the user has not typed yet.
+ *
+ * Token colors stay at full strength so typed text keeps the theme's syntax
+ * colors. Unread spans are faded with this opacity instead of a flat color,
+ * which is what was turning completed words white.
+ */
+export function untypedOpacity(textHex: string, backgroundHex: string): number {
+    if (!textHex.startsWith("#") || !backgroundHex.startsWith("#")) {
+        return 0.45;
+    }
+    return minAlphaForContrast(textHex, backgroundHex, 3);
+}
+
+/**
  * Smallest alpha in (0, MAX_UNTYPED_ALPHA] such that the foreground composited
  * over the background clears `targetRatio` against that same background. If the
  * target is unreachable under the cap, returns the cap (best muted effort).

@@ -4,6 +4,7 @@ import {
     contrastRatio,
     ghostTextColor,
     minAlphaForContrast,
+    untypedOpacity,
     relativeLuminance,
 } from "../contrast";
 import { THEME_PRESETS } from "../preferences-core";
@@ -89,6 +90,18 @@ describe("minAlphaForContrast", () => {
         if (alpha > 0.02) {
             expect(contrastRatio(compositeOver(fg, bg, alpha - 0.02), bg)).toBeLessThan(3.0);
         }
+    });
+});
+
+describe("untypedOpacity", () => {
+    it("stays inside the muted range for a high-contrast pair", () => {
+        const opacity = untypedOpacity("#cdd6f4", "#1e1e2e");
+        expect(opacity).toBeGreaterThan(0);
+        expect(opacity).toBeLessThanOrEqual(0.7);
+    });
+
+    it("falls back when a color is not hex", () => {
+        expect(untypedOpacity("rgb(205, 214, 244)", "#1e1e2e")).toBe(0.45);
     });
 });
 

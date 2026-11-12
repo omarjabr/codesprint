@@ -1,12 +1,27 @@
+import { untypedOpacity } from "@/lib/contrast";
 import {
   DEFAULT_PREFERENCES,
   STORAGE_KEY,
   THEME_PRESETS,
+  type ThemeTokens,
 } from "@/lib/preferences-core";
+
+type ThemeScriptTokens = ThemeTokens & {
+  untypedOpacity: number;
+  terminalUntypedOpacity: number;
+};
 
 export function createThemeInitScript(): string {
   const defaults = JSON.stringify(DEFAULT_PREFERENCES);
-  const themes = JSON.stringify(THEME_PRESETS);
+  const themesForScript: Record<string, ThemeScriptTokens> = {};
+  for (const [name, tokens] of Object.entries(THEME_PRESETS)) {
+    themesForScript[name] = {
+      ...tokens,
+      untypedOpacity: untypedOpacity(tokens.text, tokens.bg),
+      terminalUntypedOpacity: untypedOpacity(tokens.text, tokens.terminalBg),
+    };
+  }
+  const themes = JSON.stringify(themesForScript);
   const storageKey = JSON.stringify(STORAGE_KEY);
   return `
 (() => {
@@ -88,6 +103,12 @@ export function createThemeInitScript(): string {
     root.style.setProperty("--terminal-bg", tokens.terminalBg);
     root.style.setProperty("--caret-width", preferences.caretWidth + "px");
     root.style.setProperty("--caret-height", computeCaretHeight(preferences.fontSize) + "px");
+    const unreadOpacity = preferences.interfaceMode === "terminal"
+      ? tokens.terminalUntypedOpacity
+      : tokens.untypedOpacity;
+    if (typeof unreadOpacity === "number") {
+      root.style.setProperty("--untyped-opacity", String(unreadOpacity));
+    }
     root.setAttribute("data-interface", preferences.interfaceMode);
   };
 
