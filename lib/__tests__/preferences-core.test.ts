@@ -30,6 +30,7 @@ describe("THEME_PRESETS", () => {
         "midnight", "vaporwave", "solarized", "dracula", "monokai",
         "gruvbox", "nord", "oneDark", "8008", "arch", "bento",
         "bliss", "botanical", "carbon", "serika", "miamiNights", "terra",
+        "catppuccinMocha",
     ];
 
     it("has all expected themes", () => {

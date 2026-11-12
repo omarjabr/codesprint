@@ -86,7 +86,7 @@ Tracks your proficiency per language and recommends what to practice next. Adjus
 
 <br>
 
-- 17 color themes
+- 18 color themes
 - Vim mode support
 - Configurable font size, caret width, and syntax highlighting level
 - Panel mode or immersive/terminal mode for distraction-free practice

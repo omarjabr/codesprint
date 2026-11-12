@@ -23,7 +23,8 @@ export type ThemePreset =
     | "carbon"
     | "serika"
     | "miamiNights"
-    | "terra";
+    | "terra"
+    | "catppuccinMocha";
 
 export type ThemeTokens = {
     bg: string;
@@ -490,6 +491,21 @@ export const THEME_PRESETS: Record<ThemePreset, ThemeTokens> = {
         colorfulError: "#d3ca78",
         colorfulErrorExtra: "#89844d",
     }),
+    // Catppuccin Mocha (https://github.com/catppuccin/catppuccin). Base is the
+    // page, surface0 the lifted strip, mauve the accent, rosewater the caret,
+    // and the palette's own red, green, and yellow the status colors.
+    catppuccinMocha: createMinimalTheme("#1e1e2e", "#cba6f7", {
+        bgMuted: "#313244",
+        text: "#cdd6f4",
+        textSubtle: "#a6adc8",
+        caret: "#f5e0dc",
+        error: "#f38ba8",
+        success: "#a6e3a1",
+        warning: "#f9e2af",
+        panel: "rgba(49, 50, 68, 0.6)",
+        border: "rgba(108, 112, 134, 0.3)",
+        terminalBg: "#11111b",
+    }),
 };
 
 export const DEFAULT_PREFERENCES: PreferencesState = {
@@ -618,4 +634,5 @@ export const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreset; label: string }>
     { value: "serika", label: "Serika" },
     { value: "miamiNights", label: "Miami Nights" },
     { value: "terra", label: "Terra" },
+    { value: "catppuccinMocha", label: "Catppuccin Mocha" },
 ];
