@@ -55,10 +55,15 @@ describe("THEME_PRESETS", () => {
 });
 
 describe("computeCaretHeight", () => {
-    it("computes height as fontSize * 1.55 rounded", () => {
-        expect(computeCaretHeight(24)).toBe(37);
-        expect(computeCaretHeight(16)).toBe(25);
-        expect(computeCaretHeight(36)).toBe(56);
+    it("computes height as fontSize * 1.2 rounded, matching a Monkeytype line caret", () => {
+        expect(computeCaretHeight(24)).toBe(29);
+        expect(computeCaretHeight(16)).toBe(19);
+        expect(computeCaretHeight(36)).toBe(43);
+    });
+
+    it("returns 0 for a non-positive font size", () => {
+        expect(computeCaretHeight(0)).toBe(0);
+        expect(computeCaretHeight(Number.NaN)).toBe(0);
     });
 });
 

@@ -34,6 +34,7 @@ import {
 } from "@/lib/constants";
 import { usePrefersReducedMotion } from "@/lib/motion";
 import { THEME_PRESETS, usePreferences, type SurfaceStyle } from "@/lib/preferences";
+import { computeCaretHeight } from "@/lib/preferences-core";
 
 type MonacoModule = typeof import("monaco-editor");
 
@@ -53,6 +54,26 @@ type CodePanelProps = {
 };
 
 const LINE_BREAK_REGEX = /\r\n|\r|\n/;
+
+type EditorInstance = Parameters<OnMount>[0];
+
+/**
+ * Horizontal origin of the caret, in overflow-guard pixels.
+ *
+ * `fallbackLeft` comes from Monaco's layout info, which can lead or lag the
+ * painted gutter by a frame when line numbers toggle. The scrollable node's
+ * offset is the inset the glyphs actually use, so the caret stays on the
+ * character instead of jumping ahead of it until the next keystroke.
+ */
+function readCaretX(editor: EditorInstance, fallbackLeft: number): number {
+    const scrollable = editor.getDomNode()?.querySelector(".monaco-scrollable-element");
+    if (!(scrollable instanceof HTMLElement)) {
+        return fallbackLeft;
+    }
+    const paintedContentLeft = scrollable.offsetLeft;
+    const layoutContentLeft = editor.getLayoutInfo().contentLeft;
+    return fallbackLeft + (paintedContentLeft - layoutContentLeft);
+}
 
 // The app's single mono voice (next/font JetBrains Mono, see app/globals.css).
 const MONACO_FONT_FAMILY = "var(--font-mono), ui-monospace, Menlo, Consolas, monospace";
@@ -106,6 +127,7 @@ function CodePanel({
     const caretBlinkTimeoutRef = useRef<number | null>(null);
     const [editorReadyToken, setEditorReadyToken] = useState(0);
     const caretUpdatePendingRef = useRef(false);
+    const caretRenderAgainRef = useRef(false);
     const vimModeRef = useRef<VimMode | null>(null);
     const statusNodeRef = useRef<HTMLDivElement | null>(null);
     const tailMarkerRef = useRef<HTMLDivElement | null>(null);
@@ -113,6 +135,7 @@ function CodePanel({
     const sortedWrongChars = useMemo(() => [...wrongChars].sort((a, b) => a - b), [wrongChars]);
     const sortedAutoClosed = useMemo(() => [...autoClosedChars], [autoClosedChars]);
     const derivedLineHeight = Math.round(fontSize * LINE_HEIGHT_MULTIPLIER);
+    const caretHeight = computeCaretHeight(fontSize);
     // Full content height, uncapped: the editor never scrolls internally, so the
     // page is the single smooth scroll authority that follows the caret.
     const estimatedHeight = useMemo(() => estimateEditorHeight(content, fontSize), [content, fontSize]);
@@ -175,11 +198,11 @@ function CodePanel({
         caretNode.style.zIndex = "20";
         caretNode.style.setProperty("--caret-x", "0px");
         caretNode.style.setProperty("--caret-y", "0px");
-        caretNode.style.setProperty("--caret-height", `${derivedLineHeight}px`);
+        caretNode.style.setProperty("--caret-height", `${caretHeight}px`);
         overlayLayer.appendChild(caretNode);
         caretNodeRef.current = caretNode;
         caretLayerRef.current = overlayLayer;
-    }, [derivedLineHeight]);
+    }, [caretHeight]);
 
     // Write the caret's pixel position from Monaco geometry. SYNCHRONOUS so it can run
     // inside a layout effect (before paint) on each keystroke — this removes the ~1-2
@@ -203,24 +226,38 @@ function CodePanel({
             return;
         }
         caretNode.classList.remove("cs-caret-hidden");
-        const x = Math.max(0, coords.left);
-        const y = coords.top;
+        const lineHeight = Math.round(coords.height);
+        // Center the shorter caret in the line box so it sits on the glyphs
+        // the way Monkeytype's 1.2em caret does, instead of filling the leading.
+        const y = coords.top + Math.max(0, (lineHeight - caretHeight) / 2);
+        const x = Math.max(0, readCaretX(editor, coords.left));
         caretNode.style.setProperty("--caret-x", `${Math.round(x)}px`);
         caretNode.style.setProperty("--caret-y", `${Math.round(y)}px`);
-        caretNode.style.setProperty("--caret-height", `${Math.round(coords.height)}px`);
-    }, [ensureCaretNode]);
+        caretNode.style.setProperty("--caret-height", `${caretHeight}px`);
+    }, [caretHeight, ensureCaretNode]);
 
     // Coalesced (rAF) variant for high-frequency listeners (scroll / layout / content
     // size) where writing on every event synchronously would thrash layout.
     const scheduleCaretRender = useCallback(() => {
         if (typeof window === "undefined") return;
-        if (caretUpdatePendingRef.current) return;
+        // A layout event that arrives while a frame is already queued used to be
+        // dropped. The queued read then painted the pre-change gutter and the
+        // caret stayed there until the next keystroke.
+        if (caretUpdatePendingRef.current) {
+            caretRenderAgainRef.current = true;
+            return;
+        }
         caretUpdatePendingRef.current = true;
         ensureCaretNode();
-        caretAnimFrameRef.current = window.requestAnimationFrame(() => {
+        const pump = () => {
             caretUpdatePendingRef.current = false;
             renderCaretNow();
-        });
+            if (!caretRenderAgainRef.current) return;
+            caretRenderAgainRef.current = false;
+            caretUpdatePendingRef.current = true;
+            caretAnimFrameRef.current = window.requestAnimationFrame(pump);
+        };
+        caretAnimFrameRef.current = window.requestAnimationFrame(pump);
     }, [ensureCaretNode, renderCaretNow]);
 
     // Build + apply the per-theme Monaco theme. Extracted from the effect so it can
@@ -403,15 +440,10 @@ function CodePanel({
         };
     }, [editorReadyToken]);
 
-    useEffect(() => {
-        ensureCaretNode();
-        const caretNode = caretNodeRef.current;
-        if (caretNode) {
-            caretNode.style.setProperty("--caret-height", `${derivedLineHeight}px`);
-        }
-    }, [derivedLineHeight, ensureCaretNode]);
-
-    useEffect(() => {
+    // Before paint, so the caret doesn't sit in the gutter for a frame. Monaco
+    // applies the margin on a following frame; the extra reads catch that write
+    // and any layout event that was coalesced into the stale frame.
+    useLayoutEffect(() => {
         ensureCaretNode();
         const editor = editorRef.current;
         if (!editor) return;
@@ -419,7 +451,21 @@ function CodePanel({
             lineNumbers: surfaceStyle === "panel" ? "on" : "off",
             lineNumbersMinChars: surfaceStyle === "panel" ? 3 : 0,
         });
-    }, [surfaceStyle, ensureCaretNode]);
+        renderCaretNow();
+        let cancelled = false;
+        const firstFrame = window.requestAnimationFrame(() => {
+            if (cancelled) return;
+            renderCaretNow();
+            window.requestAnimationFrame(() => {
+                if (cancelled) return;
+                renderCaretNow();
+            });
+        });
+        return () => {
+            cancelled = true;
+            window.cancelAnimationFrame(firstFrame);
+        };
+    }, [surfaceStyle, editorReadyToken, ensureCaretNode, renderCaretNow]);
 
     useEffect(() => {
         ensureCaretNode();
@@ -539,6 +585,7 @@ function CodePanel({
         const caretNodeRefCapture = caretNodeRef;
         const caretPositionRefCapture = caretPositionRef;
         const caretUpdatePendingRefCapture = caretUpdatePendingRef;
+        const caretRenderAgainRefCapture = caretRenderAgainRef;
         const vimModeRefCapture = vimModeRef;
         const statusNodeRefCapture = statusNodeRef;
         return () => {
@@ -564,6 +611,7 @@ function CodePanel({
             caretLayerRefCapture.current = null;
             caretPositionRefCapture.current = null;
             caretUpdatePendingRefCapture.current = false;
+            caretRenderAgainRefCapture.current = false;
 
             if (vimModeRefCapture.current) {
                 vimModeRefCapture.current.dispose();

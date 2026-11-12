@@ -28,7 +28,8 @@
     --focus-ring: rgba(251, 241, 199, 0.9);
     --terminal-bg: #16130e;
     --caret-width: 2px;
-    --caret-height: 38px;
+    /* 1.2em of the default 24px font. The live value is set from the preference. */
+    --caret-height: 29px;
 
     /* Elevation. Themes rewrite --elev-1/2/3 at runtime (lib/preferences.tsx and
        app/theme-init-script.ts); these are the pre-hydration defaults. --shadow

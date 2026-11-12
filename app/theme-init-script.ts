@@ -1,5 +1,6 @@
 import { untypedOpacity } from "@/lib/contrast";
 import {
+  CARET_HEIGHT_RATIO,
   DEFAULT_PREFERENCES,
   STORAGE_KEY,
   THEME_PRESETS,
@@ -37,7 +38,7 @@ export function createThemeInitScript(): string {
     return value;
   };
 
-  const computeCaretHeight = (fontSize) => Math.round(fontSize * 1.55);
+  const computeCaretHeight = (fontSize) => Math.round(fontSize * ${CARET_HEIGHT_RATIO});
 
   const sanitize = (value) => {
     if (!value || typeof value !== "object") return { ...DEFAULTS };

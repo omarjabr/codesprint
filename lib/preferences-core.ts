@@ -530,8 +530,21 @@ export const DEFAULT_PREFERENCES: PreferencesState = {
     aiDrillLengthPreference: "auto",
 };
 
+/**
+ * Monkeytype's line caret is 1.2em: tall enough to match the glyphs, short of
+ * the full line box (which is what made the caret look oversized).
+ */
+export const CARET_HEIGHT_RATIO = 1.2;
+
+/**
+ * Visual caret height in pixels for a given editor font size.
+ * Center this in the line box; do not use it as the line height.
+ */
 export function computeCaretHeight(fontSize: number): number {
-    return Math.round(fontSize * 1.55);
+    if (!Number.isFinite(fontSize) || fontSize <= 0) {
+        return 0;
+    }
+    return Math.round(fontSize * CARET_HEIGHT_RATIO);
 }
 
 export function sanitizePreferences(value: unknown): PreferencesState {
