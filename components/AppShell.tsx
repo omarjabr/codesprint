@@ -318,7 +318,9 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
         | { label: string; icon: ReactNode; onClick: () => void; disabled?: boolean; accent?: boolean }
         | { label: string; icon: ReactNode; href: string; isExternal?: boolean };
     const dailyLabel = dailyHeaderLabel(dailyAction);
-    const iconLinks: IconLink[] = [
+    // Practice actions sit with the wordmark. The level and the app actions
+    // stay on the right, matching the header in the reference layout.
+    const brandLinks: IconLink[] = [
         {
             label: dailyLabel,
             icon: <CalendarIcon boxSize={5} />,
@@ -328,12 +330,111 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
         },
         { label: "Leaderboard", icon: <LeaderboardIcon boxSize={5} />, onClick: onOpenLeaderboard },
         { label: "Achievements", icon: <TrophyIcon boxSize={5} />, onClick: onOpenGallery },
+        { label: "About", icon: <InfoIcon boxSize={5} />, onClick: onOpenAbout },
+    ];
+    const utilityLinks: IconLink[] = [
         { label: "Analytics (A)", icon: <AnalyticsIcon boxSize={5} />, onClick: onOpenAnalytics },
         { label: "Shortcuts", icon: <CommandIcon boxSize={6} />, onClick: onOpenShortcuts },
         { label: "GitHub", href: "https://github.com/cwklurks/codesprint", icon: <GitHubIcon boxSize={5} />, isExternal: true },
         { label: "Preferences", icon: <SlidersIcon boxSize={5} />, onClick: onOpenPreferences },
-        { label: "About", icon: <InfoIcon boxSize={5} />, onClick: onOpenAbout },
     ];
+
+    /**
+     * One circular header control plus its tooltip. Shared by both icon groups
+     * so the two ends of the row stay visually identical.
+     */
+    function renderHeaderIcon(item: IconLink): ReactNode {
+        const accent = "accent" in item && item.accent === true;
+        const isDisabled = "disabled" in item && item.disabled === true;
+        const linkStyles = {
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            w: { base: 8, md: 11 },
+            h: { base: 8, md: 11 },
+            borderRadius: "full",
+            borderWidth: "1px",
+            borderStyle: "solid",
+            borderColor: accent ? "var(--accent)" : "var(--header-border)",
+            bg: "var(--surface)",
+            color: accent ? "var(--accent)" : "var(--header-text)",
+            opacity: isDisabled ? 0.45 : 1,
+            cursor: isDisabled ? "not-allowed" : "pointer",
+            transition: HEADER_CONTROL_TRANSITION,
+            transform: "translateY(0)",
+            _hover: isDisabled
+                ? {}
+                : {
+                    bg: "var(--surface-hover)",
+                    color: accent ? "var(--accent)" : "var(--header-text)",
+                    borderColor: accent ? "var(--accent)" : "var(--border-strong)",
+                    transform: "translateY(-2px)",
+                },
+            _active: isDisabled ? {} : { bg: "var(--surface-active)", transform: "scale(0.96)" },
+            _focusVisible: { boxShadow: "0 0 0 2px var(--focus-ring)" },
+        };
+
+        const trigger =
+            "href" in item
+                ? item.isExternal
+                    ? (
+                        <ChakraLink
+                            href={item.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={item.label}
+                            {...linkStyles}
+                        >
+                            {item.icon}
+                        </ChakraLink>
+                    )
+                    : (
+                        <ChakraLink
+                            as={Link}
+                            href={item.href}
+                            aria-label={item.label}
+                            {...linkStyles}
+                        >
+                            {item.icon}
+                        </ChakraLink>
+                    )
+                : (
+                    <chakra.button
+                        type="button"
+                        aria-label={item.label}
+                        onClick={item.onClick}
+                        disabled={isDisabled}
+                        {...linkStyles}
+                    >
+                        {item.icon}
+                    </chakra.button>
+                );
+
+        return (
+            <TooltipRoot key={item.label} positioning={{ strategy: "fixed", placement: "bottom" }}>
+                <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+                {/* Portaled so the header's collapse clip and backdrop
+                    don't cut the label off or paint it under the page. */}
+                <Portal>
+                    <TooltipPositioner zIndex={50}>
+                        <TooltipContent
+                            px={2}
+                            py={1}
+                            borderRadius="var(--radius-sm)"
+                            bg="var(--surface)"
+                            color="var(--header-text)"
+                            border="1px solid var(--border)"
+                            fontSize="xs"
+                            zIndex={50}
+                        >
+                            {item.label}
+                        </TooltipContent>
+                    </TooltipPositioner>
+                </Portal>
+            </TooltipRoot>
+        );
+    }
 
     return (
         <Box
@@ -359,7 +460,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                         gap={{ base: 2, md: 5 }}
                         flexWrap="wrap"
                     >
-                        <Flex align="center" gap={4} flexShrink={0}>
+                        <Flex align="center" gap={{ base: 2, md: 4 }} flexShrink={0} minW={0}>
                             <Link href="/" aria-label="CodeSprint home">
                                 {/* The single h1 for the app: the home hero deliberately
                                     does not repeat the wordmark. */}
@@ -367,6 +468,9 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                     codesprint
                                 </Text>
                             </Link>
+                            <Flex gap={{ base: 0.5, md: 2 }} align="center" flexWrap="nowrap" flexShrink={0}>
+                                {brandLinks.map(renderHeaderIcon)}
+                            </Flex>
                         </Flex>
                         <Flex
                             align="center"
@@ -448,98 +552,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                 </Flex>
                             )}
                             <Flex gap={{ base: 0.5, md: 2 }} align="center" flexWrap="nowrap" flexShrink={0}>
-                                {iconLinks.map((item) => {
-                                    const accent = "accent" in item && item.accent === true;
-                                    const isDisabled = "disabled" in item && item.disabled === true;
-                                    const linkStyles = {
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        flexShrink: 0,
-                                        w: { base: 8, md: 11 },
-                                        h: { base: 8, md: 11 },
-                                        borderRadius: "full",
-                                        borderWidth: "1px",
-                                        borderStyle: "solid",
-                                        borderColor: accent ? "var(--accent)" : "var(--header-border)",
-                                        bg: "var(--surface)",
-                                        color: accent ? "var(--accent)" : "var(--header-text)",
-                                        opacity: isDisabled ? 0.45 : 1,
-                                        cursor: isDisabled ? "not-allowed" : "pointer",
-                                        transition: HEADER_CONTROL_TRANSITION,
-                                        transform: "translateY(0)",
-                                        _hover: isDisabled
-                                            ? {}
-                                            : {
-                                                bg: "var(--surface-hover)",
-                                                color: accent ? "var(--accent)" : "var(--header-text)",
-                                                borderColor: accent ? "var(--accent)" : "var(--border-strong)",
-                                                transform: "translateY(-2px)",
-                                            },
-                                        _active: isDisabled ? {} : { bg: "var(--surface-active)", transform: "scale(0.96)" },
-                                        _focusVisible: { boxShadow: "0 0 0 2px var(--focus-ring)" },
-                                    };
-
-                                    const trigger =
-                                        "href" in item
-                                            ? item.isExternal
-                                                ? (
-                                                    <ChakraLink
-                                                        href={item.href}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        aria-label={item.label}
-                                                        {...linkStyles}
-                                                    >
-                                                        {item.icon}
-                                                    </ChakraLink>
-                                                )
-                                                : (
-                                                    <ChakraLink
-                                                        as={Link}
-                                                        href={item.href}
-                                                        aria-label={item.label}
-                                                        {...linkStyles}
-                                                    >
-                                                        {item.icon}
-                                                    </ChakraLink>
-                                                )
-                                            : (
-                                                <chakra.button
-                                                    type="button"
-                                                    aria-label={item.label}
-                                                    onClick={item.onClick}
-                                                    disabled={isDisabled}
-                                                    {...linkStyles}
-                                                >
-                                                    {item.icon}
-                                                </chakra.button>
-                                            );
-
-                                    return (
-                                        <TooltipRoot key={item.label} positioning={{ strategy: "fixed", placement: "bottom" }}>
-                                            <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-                                            {/* Portaled so the header's collapse clip and backdrop
-                                                don't cut the label off or paint it under the page. */}
-                                            <Portal>
-                                                <TooltipPositioner zIndex={50}>
-                                                    <TooltipContent
-                                                        px={2}
-                                                        py={1}
-                                                        borderRadius="var(--radius-sm)"
-                                                        bg="var(--surface)"
-                                                        color="var(--header-text)"
-                                                        border="1px solid var(--border)"
-                                                        fontSize="xs"
-                                                        zIndex={50}
-                                                    >
-                                                        {item.label}
-                                                    </TooltipContent>
-                                                </TooltipPositioner>
-                                            </Portal>
-                                        </TooltipRoot>
-                                    );
-                                })}
+                                {utilityLinks.map(renderHeaderIcon)}
                             </Flex>
                         </Flex>
                     </Flex>
