@@ -108,6 +108,76 @@ function stepVertical(
     return cursor;
 }
 
+function positionsOnLine(content: string, allowed: readonly number[], cursor: number): number[] {
+    const lineStart = lineStartOf(content, cursor);
+    const lineEnd = lineEndOf(content, lineStart);
+    return allowed.filter((position) => position >= lineStart && position <= lineEnd);
+}
+
+/**
+ * End of the written run that contains `cursor` on this line.
+ *
+ * Stops at the first gap, so a jump reaches the end of the word or line the
+ * user has typed and does not leap across template text to a distant closer.
+ */
+function contiguousEnd(positions: readonly number[], cursor: number): number {
+    let end = cursor;
+    for (const position of positions) {
+        if (position < cursor) continue;
+        if (position > end + 1) break;
+        end = position;
+    }
+    return end;
+}
+
+/**
+ * Cmd/Ctrl+Left or Right within text the user has already written.
+ *
+ * Left goes to the start of the line. Right goes to the end of the typed
+ * word when the line is unfinished, and to the end of the line when it is not.
+ */
+export function jumpCaret(
+    content: string,
+    cursor: number,
+    progressIndex: number,
+    autoClosed: readonly number[],
+    direction: "left" | "right",
+): { cursor: number; preferredColumn: number } {
+    const allowed = allowedCaretPositions(content.length, progressIndex, autoClosed);
+    const onLine = positionsOnLine(content, allowed, cursor);
+    if (onLine.length === 0) {
+        return { cursor, preferredColumn: columnAt(content, cursor) };
+    }
+
+    const lineStart = lineStartOf(content, cursor);
+    const next = direction === "left"
+        ? (onLine.includes(lineStart) ? lineStart : onLine[0])
+        : contiguousEnd(onLine, cursor);
+    return { cursor: next, preferredColumn: columnAt(content, next) };
+}
+
+/**
+ * How far a forward jump may extend the typed run.
+ *
+ * A jump that only crosses auto-closed closers consumes them. A jump that
+ * would have to cross untyped template text leaves progress where it is.
+ */
+export function progressAfterCaretJump(
+    before: number,
+    next: number,
+    progress: number,
+    autoClosed: readonly number[],
+): number {
+    if (before !== progress || next <= progress) return progress;
+    const closed = new Set(autoClosed);
+    let index = progress;
+    while (index < next) {
+        if (!closed.has(index)) return progress;
+        index += 1;
+    }
+    return next;
+}
+
 /**
  * Next caret index for an arrow key.
  *

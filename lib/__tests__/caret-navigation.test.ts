@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedCaretPositions, moveCaret } from "@/lib/caret-navigation";
+import { allowedCaretPositions, jumpCaret, moveCaret, progressAfterCaretJump } from "@/lib/caret-navigation";
 
 describe("allowedCaretPositions", () => {
     it("includes the typed prefix and an auto-closed closer ahead of it", () => {
@@ -56,5 +56,37 @@ describe("moveCaret", () => {
         const content = "foo(\n)\n";
         const down = moveCaret(content, 4, 4, [5], "ArrowDown", 0);
         expect(down.cursor).toBe(5);
+    });
+});
+
+describe("jumpCaret", () => {
+    it("jumps to the start of the line and the end of the typed word", () => {
+        const content = "hello world\nnext";
+        const end = jumpCaret(content, 2, 8, [], "right");
+        expect(end.cursor).toBe(8);
+
+        const start = jumpCaret(content, 8, 8, [], "left");
+        expect(start.cursor).toBe(0);
+    });
+
+    it("jumps to the end of a finished line and does not enter the next one", () => {
+        const content = "hello world\nnext";
+        const end = jumpCaret(content, 3, 11, [], "right");
+        expect(end.cursor).toBe(11);
+
+        const start = jumpCaret(content, end.cursor, 11, [], "left");
+        expect(start.cursor).toBe(0);
+    });
+
+    it("does not leap from the typed word to a closer across untyped text", () => {
+        const content = "call(bar)";
+        const end = jumpCaret(content, 2, 5, [8], "right");
+        expect(end.cursor).toBe(5);
+    });
+
+    it("extends progress only across a closer that is already the next character", () => {
+        expect(progressAfterCaretJump(1, 2, 1, [1])).toBe(2);
+        expect(progressAfterCaretJump(5, 9, 5, [8])).toBe(5);
+        expect(progressAfterCaretJump(2, 5, 5, [])).toBe(5);
     });
 });

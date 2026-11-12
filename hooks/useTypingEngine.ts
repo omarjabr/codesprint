@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findAutoCloseIndices } from "@/lib/auto-pairs";
-import { columnAt, isCaretArrowKey, moveCaret } from "@/lib/caret-navigation";
+import { columnAt, isCaretArrowKey, jumpCaret, moveCaret, progressAfterCaretJump } from "@/lib/caret-navigation";
 import { computeMetrics, createPatternScoreCalculator, type Metrics } from "@/lib/scoring";
 import type { Snippet } from "@/lib/snippets";
 import { tokenize } from "@/lib/tokenizer";
@@ -503,7 +503,12 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         // Arrow keys move through text already written, including an auto-closed
         // closer, and stop at template text that has not been typed yet.
         if (isCaretArrowKey(e.key)) {
-            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            // Cmd on Mac and Ctrl on Windows jump within the typed line.
+            // Plain arrows still move one character. Alt is left alone.
+            const lineJump = (e.metaKey || e.ctrlKey)
+                && !e.altKey
+                && (e.key === "ArrowLeft" || e.key === "ArrowRight");
+            if ((e.metaKey || e.ctrlKey || e.altKey) && !lineJump) return;
             e.preventDefault();
             e.stopPropagation();
             if (phaseNow !== "running" && phaseNow !== "finished") return;
@@ -512,20 +517,28 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             const before = cursorIndexRef.current;
             const progress = progressIndexRef.current;
             const closed = readAutoClosed();
-            const moved = moveCaret(content, before, progress, closed, e.key, preferredColumnRef.current);
-            const steppedOverCloser = e.key === "ArrowRight"
+            const moved = lineJump
+                ? jumpCaret(content, before, progress, closed, e.key === "ArrowRight" ? "right" : "left")
+                : moveCaret(content, before, progress, closed, e.key, preferredColumnRef.current);
+            const steppedOverCloser = !lineJump
+                && e.key === "ArrowRight"
                 && before === progress
                 && moved.cursor === before + 1
                 && closed.includes(before);
+            const nextProgress = lineJump
+                ? progressAfterCaretJump(before, moved.cursor, progress, closed)
+                : steppedOverCloser
+                    ? moved.cursor
+                    : progress;
             preferredColumnRef.current = moved.preferredColumn;
             if (moved.cursor !== before) {
                 cursorIndexRef.current = moved.cursor;
                 setCursorIndex(moved.cursor);
             }
-            if (steppedOverCloser) {
-                progressIndexRef.current = moved.cursor;
-                setProgressIndex(moved.cursor);
-                maybeFinish(moved.cursor, Date.now());
+            if (nextProgress !== progress) {
+                progressIndexRef.current = nextProgress;
+                setProgressIndex(nextProgress);
+                maybeFinish(nextProgress, Date.now());
             }
             return;
         }

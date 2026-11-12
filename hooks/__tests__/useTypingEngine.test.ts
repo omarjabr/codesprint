@@ -589,6 +589,49 @@ describe("useTypingEngine", () => {
         expect([...tripleHook.result.current.autoClosedChars]).toEqual([5, 6, 7]);
     });
 
+    it("jumps to the start of the line or the end of the typed word", () => {
+        const snippet = makeSnippet("hello world\nnext");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            for (const key of ["h", "e", "l", "l", "o", " ", "w", "o"]) {
+                result.current.handleKeyDown(fireKey(key));
+            }
+            result.current.handleKeyDown(fireKey("ArrowLeft"));
+            result.current.handleKeyDown(fireKey("ArrowLeft"));
+            result.current.handleKeyDown(fireKey("ArrowRight", { metaKey: true }));
+        });
+
+        expect(result.current.cursorIndex).toBe(8);
+        expect(result.current.progressIndex).toBe(8);
+        expect(result.current.totalKeystrokes).toBe(8);
+        expect(result.current.wrongChars.size).toBe(0);
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("ArrowLeft", { ctrlKey: true }));
+        });
+
+        expect(result.current.cursorIndex).toBe(0);
+        expect(result.current.progressIndex).toBe(8);
+        expect(result.current.phase).toBe("running");
+    });
+
+    it("command-right passes a closer that is the next character", () => {
+        const snippet = makeSnippet("()");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("("));
+            result.current.handleKeyDown(fireKey("ArrowRight", { metaKey: true }));
+        });
+
+        expect(result.current.cursorIndex).toBe(2);
+        expect(result.current.progressIndex).toBe(2);
+        expect(result.current.phase).toBe("finished");
+        expect(result.current.totalKeystrokes).toBe(1);
+        expect(result.current.wrongChars.size).toBe(0);
+    });
+
     it("does not start a run from an arrow key", () => {
         const snippet = makeSnippet("hello");
         const { result } = renderHook(() => useTypingEngine({ snippet }));

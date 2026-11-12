@@ -10,6 +10,7 @@ export const KEYBOARD_SHORTCUTS: Shortcut[] = [
     { combo: "P", detail: "Open preferences" },
     { combo: "A", detail: "Open analytics dashboard" },
     { combo: "V", detail: "Toggle Vim preview to skim the snippet before typing" },
+    { combo: "Cmd/Ctrl + Left/Right", detail: "Jump to the start or end of the line you have typed" },
     { combo: "Esc", detail: "Abort the current run" },
     { combo: "Shift + A", detail: "Generate AI drill after a run (requires API key)" },
 ];
