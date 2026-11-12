@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { findAutoCloseIndices } from "@/lib/auto-pairs";
 import { computeMetrics, createPatternScoreCalculator, type Metrics } from "@/lib/scoring";
 import type { Snippet } from "@/lib/snippets";
 import { tokenize } from "@/lib/tokenizer";
@@ -74,6 +75,11 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     // only when the set actually gains or loses a member.
     const [publishedWrongChars, setPublishedWrongChars] = useState<Set<number>>(new Set());
     const wrongCharsDirtyRef = useRef(false);
+    // Closer indices an editor would have inserted. Keyed by the opener index
+    // so backspacing that opener removes the pair.
+    const autoClosedRef = useRef(new Map<number, readonly number[]>());
+    const autoClosedDirtyRef = useRef(false);
+    const [autoClosedChars, setAutoClosedChars] = useState<ReadonlySet<number>>(new Set());
 
     const markWrong = useCallback((index: number) => {
         if (wrongCharsRef.current.has(index)) return;
@@ -90,6 +96,16 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         if (!wrongCharsDirtyRef.current) return;
         wrongCharsDirtyRef.current = false;
         setPublishedWrongChars(new Set(wrongCharsRef.current));
+    }, []);
+
+    const publishAutoClosed = useCallback(() => {
+        if (!autoClosedDirtyRef.current) return;
+        autoClosedDirtyRef.current = false;
+        const next = new Set<number>();
+        for (const closers of autoClosedRef.current.values()) {
+            for (const index of closers) next.add(index);
+        }
+        setAutoClosedChars(next);
     }, []);
 
     const [startTime, setStartTime] = useState<number | null>(null);
@@ -216,11 +232,14 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         finalSnapshotRef.current = null;
         wrongCharsRef.current = new Set();
         wrongCharsDirtyRef.current = false;
+        autoClosedRef.current = new Map();
+        autoClosedDirtyRef.current = false;
         clearCaretErrorTimeout();
         setPhase("idle");
         setCountdown(null);
         setCursorIndex(0);
         setPublishedWrongChars(new Set());
+        setAutoClosedChars(new Set());
         setStartTime(null);
         setNow(Date.now());
         setCaretErrorActive(false);
@@ -541,6 +560,10 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             cursorIndexRef.current = targetIndex;
             setCursorIndex(targetIndex);
             clearWrong(targetIndex);
+            // Deleting the opener removes the closer the editor inserted with it.
+            if (autoClosedRef.current.delete(targetIndex)) {
+                autoClosedDirtyRef.current = true;
+            }
             return;
         }
 
@@ -574,6 +597,12 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             countersRef.current.correctKeystrokes += 1;
             setCorrectKeystrokes(prev => prev + 1);
             clearWrong(currentIndex);
+            const snippetNow = snippetRef.current;
+            const closers = findAutoCloseIndices(snippetNow.content, currentIndex, snippetNow.language);
+            if (closers.length > 0) {
+                autoClosedRef.current.set(currentIndex, closers);
+                autoClosedDirtyRef.current = true;
+            }
         } else {
             markWrong(currentIndex);
             flagCaretError();
@@ -593,7 +622,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         processKeyDown(e);
         // One clone per real change to the wrong-char set, instead of one per tick.
         publishWrongChars();
-    }, [processKeyDown, publishWrongChars]);
+        publishAutoClosed();
+    }, [processKeyDown, publishAutoClosed, publishWrongChars]);
 
     // Interval-based metrics publishing during running phase. ~200ms so the
     // live WPM climbs continuously instead of lurching every 1.5s; computeMetrics
@@ -644,6 +674,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         countdown,
         cursorIndex,
         wrongChars: publishedWrongChars,
+        /** Closers inserted with an opener. Highlighted before the caret reaches them. */
+        autoClosedChars,
         metrics: publishedMetrics,
         elapsedMs,
         errorLog,

@@ -460,6 +460,7 @@ export default function TypingSession() {
                                                     content={controls.snippet.content}
                                                     cursorChar={engine.cursorIndex}
                                                     wrongChars={engine.wrongChars}
+                                                    autoClosedChars={engine.autoClosedChars}
                                                     language={controls.language}
                                                     caretErrorActive={engine.caretErrorActive}
                                                     onReady={focus.handleEditorReady}

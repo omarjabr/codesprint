@@ -94,8 +94,16 @@ export function estimateEditorHeight(content: string, fontSize: number): number 
     return Math.max(MIN_EDITOR_HEIGHT, lines * lineHeight);
 }
 
-/** Half-open completed ranges, split only at errors. Errors must be sorted ascending. */
-export function getCompletedRanges(caretIndex: number, sortedWrongChars: readonly number[]): [number, number][] {
+/**
+ * Half-open completed ranges, split only at errors. Errors must be sorted
+ * ascending. `autoClosed` lists closers an editor already inserted; those
+ * stay highlighted even while the caret is still inside the pair.
+ */
+export function getCompletedRanges(
+    caretIndex: number,
+    sortedWrongChars: readonly number[],
+    autoClosed: readonly number[] = [],
+): [number, number][] {
     const ranges: [number, number][] = [];
     let start = 0;
     for (const error of sortedWrongChars) {
@@ -104,6 +112,18 @@ export function getCompletedRanges(caretIndex: number, sortedWrongChars: readonl
         start = error + 1;
     }
     if (start < caretIndex) ranges.push([start, caretIndex]);
+
+    const wrong = new Set(sortedWrongChars);
+    const extras = [...autoClosed].filter((index) => index >= caretIndex && !wrong.has(index));
+    extras.sort((a, b) => a - b);
+    for (const index of extras) {
+        const last = ranges[ranges.length - 1];
+        if (last && last[1] === index) {
+            last[1] = index + 1;
+        } else {
+            ranges.push([index, index + 1]);
+        }
+    }
     return ranges;
 }
 

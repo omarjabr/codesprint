@@ -78,6 +78,11 @@ describe("getCompletedRanges", () => {
         expect(getCompletedRanges(3, [0, 1, 2])).toEqual([]);
     });
 
+    it("highlights an auto-closed closer that is still ahead of the caret", () => {
+        expect(getCompletedRanges(1, [], [4])).toEqual([[0, 1], [4, 5]]);
+        expect(getCompletedRanges(1, [], [1])).toEqual([[0, 2]]);
+    });
+
     it("ignores errors at or past the cursor after backspacing", () => {
         expect(getCompletedRanges(3, [1, 3, 8])).toEqual([[0, 1], [2, 3]]);
         expect(getCompletedRanges(0, [0, 1])).toEqual([]);

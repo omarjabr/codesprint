@@ -41,6 +41,7 @@ type CodePanelProps = {
     content: string;
     cursorChar: number;
     wrongChars: Set<number>;
+    autoClosedChars: ReadonlySet<number>;
     language: "javascript" | "python" | "java" | "cpp";
     caretErrorActive: boolean;
     onReady?: (focusEditor: () => void) => void;
@@ -82,6 +83,7 @@ function CodePanel({
     content,
     cursorChar,
     wrongChars,
+    autoClosedChars,
     language,
     caretErrorActive,
     onReady,
@@ -106,6 +108,7 @@ function CodePanel({
     const tailMarkerRef = useRef<HTMLDivElement | null>(null);
 
     const sortedWrongChars = useMemo(() => [...wrongChars].sort((a, b) => a - b), [wrongChars]);
+    const sortedAutoClosed = useMemo(() => [...autoClosedChars], [autoClosedChars]);
     const derivedLineHeight = Math.round(fontSize * LINE_HEIGHT_MULTIPLIER);
     // Full content height, uncapped: the editor never scrolls internally, so the
     // page is the single smooth scroll authority that follows the caret.
@@ -499,7 +502,7 @@ function CodePanel({
 
         const caretIndex = Math.max(0, Math.min(cursorChar, content.length));
 
-        const completedDecorations: Monaco.editor.IModelDeltaDecoration[] = getCompletedRanges(caretIndex, sortedWrongChars)
+        const completedDecorations: Monaco.editor.IModelDeltaDecoration[] = getCompletedRanges(caretIndex, sortedWrongChars, sortedAutoClosed)
             .map(([start, end]) => {
                 const startPos = model.getPositionAt(start);
                 const endPos = model.getPositionAt(end);
@@ -521,7 +524,7 @@ function CodePanel({
             ...completedDecorations,
             ...errorDecorations,
         ]);
-    }, [cursorChar, sortedWrongChars, content, editorReadyToken, ensureCaretNode]);
+    }, [cursorChar, sortedAutoClosed, sortedWrongChars, content, editorReadyToken, ensureCaretNode]);
 
     useEffect(() => {
         const editorRefCapture = editorRef;

@@ -35,13 +35,13 @@ vi.mock("@/lib/preferences", () => ({
 // Must import AFTER vi.mock so the mock is in place
 import { useTypingEngine } from "../useTypingEngine";
 
-function makeSnippet(content: string): Snippet {
+function makeSnippet(content: string, language: Snippet["language"] = "javascript"): Snippet {
     return {
         id: "test",
         problemId: "test:test",
         title: "Test Snippet",
         content,
-        language: "javascript" as const,
+        language,
         lengthCategory: "short" as const,
         difficulty: "easy" as const,
         lines: content.split("\n").length,
@@ -534,5 +534,58 @@ describe("useTypingEngine", () => {
         expect(keys).toContain("start");
         expect(keys).toContain("handleKeyDown");
         expect(keys).toContain("setPhase");
+    });
+
+    it("inserts the matching closer when an opener is typed and removes it on backspace", () => {
+        const snippet = makeSnippet("call(bar)");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            for (const key of ["c", "a", "l", "l", "("]) {
+                result.current.handleKeyDown(fireKey(key));
+            }
+        });
+
+        expect(result.current.cursorIndex).toBe(5);
+        expect([...result.current.autoClosedChars]).toEqual([8]);
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("Backspace"));
+        });
+
+        expect(result.current.cursorIndex).toBe(4);
+        expect([...result.current.autoClosedChars]).toEqual([]);
+    });
+
+    it("does not treat a parenthesis inside a string as the closer", () => {
+        const snippet = makeSnippet("foo(\")\")");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            for (const key of ["f", "o", "o", "("]) {
+                result.current.handleKeyDown(fireKey(key));
+            }
+        });
+
+        expect(result.current.cursorIndex).toBe(4);
+        expect([...result.current.autoClosedChars]).toEqual([7]);
+    });
+
+    it("closes a quote and a Python triple quote from the opening key", () => {
+        const quotes = makeSnippet("\"hi\"");
+        const { result } = renderHook(() => useTypingEngine({ snippet: quotes }));
+        act(() => {
+            result.current.handleKeyDown(fireKey("\""));
+        });
+        expect(result.current.cursorIndex).toBe(1);
+        expect([...result.current.autoClosedChars]).toEqual([3]);
+
+        const triple = makeSnippet("\"\"\"hi\"\"\"", "python");
+        const tripleHook = renderHook(() => useTypingEngine({ snippet: triple }));
+        act(() => {
+            tripleHook.result.current.handleKeyDown(fireKey("\""));
+        });
+        expect(tripleHook.result.current.cursorIndex).toBe(1);
+        expect([...tripleHook.result.current.autoClosedChars]).toEqual([5, 6, 7]);
     });
 });
