@@ -19,8 +19,6 @@ export interface SessionTopBarProps extends ProgressIndicatorProps {
     problemCount: number;
     /** Callback when next problem button is clicked */
     onNextProblem: () => void;
-    /** Callback when leaderboard button is clicked */
-    onLeaderboardOpen: () => void;
 }
 
 /**
@@ -35,7 +33,6 @@ function SessionTopBarImpl({
     currentProblem,
     problemCount,
     onNextProblem,
-    onLeaderboardOpen,
 }: SessionTopBarProps) {
     const nextProblemButtonStyles = getNextProblemButtonStyles(isTerminalMode);
 
@@ -97,8 +94,8 @@ function SessionTopBarImpl({
     );
 
     // Chrome is hidden for the whole run, so both halves have to stand down —
-    // otherwise Leaderboard and Next problem stay lit while the editor is meant
-    // to be the only thing on screen.
+    // otherwise Next problem stays lit while the editor is meant to be the only
+    // thing on screen.
     const hasMeta = showChrome;
     const hasActions = showChrome && Boolean(nextProblemButton);
 
@@ -121,15 +118,6 @@ function SessionTopBarImpl({
             )}
             {hasActions && (
                 <Flex align="center" gap={2} flexWrap="wrap" ml={hasMeta ? undefined : "auto"}>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        color="var(--text-subtle)"
-                        _hover={{ color: "var(--accent)", bg: "var(--surface-hover)" }}
-                        onClick={onLeaderboardOpen}
-                    >
-                        Leaderboard
-                    </Button>
                     {nextProblemButton}
                 </Flex>
             )}

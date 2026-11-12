@@ -49,19 +49,15 @@ const ResultScreen = dynamic(
 
 // Both are opened by user action only, and both used to be mounted with
 // isOpen={false}, re-rendering on every keystroke of a run.
-const LeaderboardModal = dynamic(() => import("@/components/LeaderboardModal"), { ssr: false });
 const AIDrillPanel = dynamic(() => import("@/components/AIDrillPanel"), { ssr: false });
 
 export default function TypingSession() {
-    const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
     const [isDrillPanelOpen, setIsDrillPanelOpen] = useState(false);
     const [difficultyTransition, setDifficultyTransition] = useState<DifficultyTransition | undefined>(undefined);
     const panelContainerRef = useRef<HTMLDivElement | null>(null);
     const { isOverlayOpen, setOverlayOpen } = useOverlayState();
     const { setDailyHeaderAction } = useDailyHeaderAction();
 
-    const openLeaderboard = useCallback(() => setIsLeaderboardOpen(true), []);
-    const closeLeaderboard = useCallback(() => setIsLeaderboardOpen(false), []);
     const openDrillPanel = useCallback(() => setIsDrillPanelOpen(true), []);
     const closeDrillPanel = useCallback(() => setIsDrillPanelOpen(false), []);
 
@@ -69,10 +65,6 @@ export default function TypingSession() {
     // capture-phase key handler stands down while one of them owns the keyboard.
     // The cleanups matter: without them an unmount (or a dynamic chunk that never
     // loads) would leave the gate latched and the keyboard dead.
-    useEffect(() => {
-        setOverlayOpen("leaderboard", isLeaderboardOpen);
-        return () => setOverlayOpen("leaderboard", false);
-    }, [isLeaderboardOpen, setOverlayOpen]);
     useEffect(() => {
         setOverlayOpen("ai-drill", isDrillPanelOpen);
         return () => setOverlayOpen("ai-drill", false);
@@ -437,7 +429,6 @@ export default function TypingSession() {
                                                 currentProblem={controls.currentProblem}
                                                 problemCount={controls.problemOptions.length}
                                                 onNextProblem={handleNextProblem}
-                                                onLeaderboardOpen={openLeaderboard}
                                             />
 
                                             {/* Live Stats (during running) */}
@@ -531,13 +522,6 @@ export default function TypingSession() {
                     />
                 )}
             </AnimatePresence>
-
-            {isLeaderboardOpen && (
-                <LeaderboardModal
-                    isOpen
-                    onOpenChange={(e) => { if (!e.open) closeLeaderboard(); }}
-                />
-            )}
 
             {isDrillPanelOpen && (
                 <AIDrillPanel

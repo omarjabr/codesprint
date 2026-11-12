@@ -50,12 +50,10 @@ describe("SessionTopBar focus-mode chrome", () => {
         currentProblem: null,
         problemCount: 4,
         onNextProblem: vi.fn(),
-        onLeaderboardOpen: vi.fn(),
     };
 
-    it("hides both actions during a run", () => {
+    it("hides the next-problem action during a run", () => {
         const { queryByText } = render(<SessionTopBar {...topBarProps} showChrome={false} />);
-        expect(queryByText("Leaderboard")).toBeNull();
         expect(queryByText("Next problem")).toBeNull();
     });
 
@@ -68,7 +66,6 @@ describe("SessionTopBar focus-mode chrome", () => {
 
     it("shows the actions again once the run ends", () => {
         const { queryByText } = render(<SessionTopBar {...topBarProps} />);
-        expect(queryByText("Leaderboard")).toBeTruthy();
         expect(queryByText("Next problem")).toBeTruthy();
     });
 });

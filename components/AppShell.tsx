@@ -3,7 +3,6 @@
 import Link from "next/link";
 import {
     Box,
-    Button,
     Container,
     Flex,
     Link as ChakraLink,
@@ -33,6 +32,7 @@ const PreferencesDrawer = dynamic(() => import("@/components/PreferencesDrawer")
 const ShortcutsDrawer = dynamic(() => import("@/components/ShortcutsDrawer"), { ssr: false });
 const AnalyticsModal = dynamic(() => import("@/components/AnalyticsModal"), { ssr: false });
 const AchievementGallery = dynamic(() => import("@/components/AchievementGallery"), { ssr: false });
+const LeaderboardModal = dynamic(() => import("@/components/LeaderboardModal"), { ssr: false });
 
 type OverlayStateValue = {
     /** True while ANY dialog/drawer in the app is open. */
@@ -80,8 +80,8 @@ export function dailyHeaderLabel(action: DailyHeaderAction | null): string {
 
 /**
  * Central "a dialog owns the keyboard" gate. Overlay state is spread across
- * AppShell (preferences/shortcuts/analytics/gallery) and TypingSession
- * (leaderboard/AI drills); the typing engine's capture-phase key handler needs a
+ * AppShell (preferences/shortcuts/analytics/gallery/leaderboard) and TypingSession
+ * (AI drills); the typing engine's capture-phase key handler needs a
  * single answer, otherwise keys meant for an open dialog reach the engine.
  */
 export function useOverlayState(): OverlayStateValue {
@@ -108,7 +108,7 @@ function useProgressSummary() {
     return data;
 }
 
-type ActiveModal = "preferences" | "shortcuts" | "analytics" | "gallery" | null;
+type ActiveModal = "preferences" | "shortcuts" | "analytics" | "gallery" | "leaderboard" | null;
 
 /** One timing for every header affordance, taken from the motion scale. */
 const HEADER_CONTROL_TRANSITION = [
@@ -214,7 +214,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         function handleGlobalShortcut(event: KeyboardEvent) {
             if (event.defaultPrevented) return;
             if (event.metaKey || event.ctrlKey || event.altKey) return;
-            // A dialog owned by the session (leaderboard, AI drill) has the
+            // A dialog owned by the session (AI drill) has the
             // keyboard: the session's capture handler stands down for it without
             // stopping propagation, so without this p/a would open Preferences or
             // Analytics on top of it. `activeModal` is a single slot and cannot
@@ -259,6 +259,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         onOpenShortcuts={() => setActiveModal("shortcuts")}
                         onOpenAnalytics={() => setActiveModal("analytics")}
                         onOpenGallery={() => setActiveModal("gallery")}
+                        onOpenLeaderboard={() => setActiveModal("leaderboard")}
                         progressSummary={progressSummary}
                         dailyAction={dailyAction}
                     />
@@ -269,6 +270,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {activeModal === "preferences" && <PreferencesDrawer isOpen onClose={close} />}
                 {activeModal === "shortcuts" && <ShortcutsDrawer isOpen onClose={close} />}
                 {activeModal === "analytics" && <AnalyticsModal isOpen onOpenChange={({ open }) => { if (!open) close(); }} />}
+                {activeModal === "leaderboard" && (
+                    <LeaderboardModal isOpen onOpenChange={({ open }) => { if (!open) close(); }} />
+                )}
                 {activeModal === "gallery" && (
                     <AchievementGallery
                         isOpen
@@ -288,11 +292,12 @@ type HeaderProps = {
     onOpenShortcuts: () => void;
     onOpenAnalytics: () => void;
     onOpenGallery: () => void;
+    onOpenLeaderboard: () => void;
     progressSummary: { totalXp: number; streak: number; unlockedIds: Set<string> } | null;
     dailyAction: DailyHeaderAction | null;
 };
 
-function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGallery, progressSummary, dailyAction }: HeaderProps) {
+function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGallery, onOpenLeaderboard, progressSummary, dailyAction }: HeaderProps) {
     const prefersReducedMotion = usePrefersReducedMotion();
 
     const headerMotion: MotionProps = prefersReducedMotion
@@ -316,10 +321,12 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
             disabled: !dailyAction || dailyAction.disabled,
             accent: Boolean(dailyAction?.completed),
         },
+        { label: "Leaderboard", icon: <LeaderboardIcon boxSize={5} />, onClick: onOpenLeaderboard },
         { label: "Achievements", icon: <TrophyIcon boxSize={5} />, onClick: onOpenGallery },
         { label: "Analytics (A)", icon: <AnalyticsIcon boxSize={5} />, onClick: onOpenAnalytics },
         { label: "Shortcuts", icon: <CommandIcon boxSize={6} />, onClick: onOpenShortcuts },
         { label: "GitHub", href: "https://github.com/cwklurks/codesprint", icon: <GitHubIcon boxSize={5} />, isExternal: true },
+        { label: "Preferences", icon: <SlidersIcon boxSize={5} />, onClick: onOpenPreferences },
     ];
 
     return (
@@ -339,7 +346,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                     {/* One row at every width. Stacked, this header ate 165px of a
                         390x844 screen and pushed the editor clean below the fold,
                         so on phones the wordmark shrinks, the level meter stands
-                        down and Preferences collapses to its icon. */}
+                        down. Every header action, including Preferences, is an icon. */}
                     <Flex
                         direction="row"
                         align="center"
@@ -524,34 +531,6 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                     );
                                 })}
                             </Flex>
-                            <Button
-                                aria-label="Preferences"
-                                size="md"
-                                borderRadius="full"
-                                px={{ base: 0, md: 5 }}
-                                // Squares up with the icon buttons beside it at
-                                // both sizes (32px on phones, 44px from md).
-                                w={{ base: 8, md: "auto" }}
-                                h={{ base: 8, md: 11 }}
-                                minW={{ base: 8, md: "auto" }}
-                                flexShrink={0}
-                                variant="outline"
-                                borderColor="var(--border)"
-                                color="var(--header-text)"
-                                bg="transparent"
-                                fontSize="sm"
-                                transition={HEADER_CONTROL_TRANSITION}
-                                _hover={{ borderColor: "var(--border-strong)", bg: "var(--surface-hover)" }}
-                                _active={{ borderColor: "var(--border-strong)", bg: "var(--surface-active)" }}
-                                onClick={onOpenPreferences}
-                            >
-                                {/* Label on desktop, icon on phones — the aria-label
-                                    keeps the accessible name "Preferences" either way. */}
-                                <Box as="span" display={{ base: "none", md: "inline" }}>
-                                    Preferences
-                                </Box>
-                                <SlidersIcon boxSize={5} display={{ base: "block", md: "none" }} />
-                            </Button>
                         </Flex>
                     </Flex>
                 </Container>
@@ -634,6 +613,28 @@ function CalendarIcon(props: ChakraIconProps) {
             <path d="M16 2v4" />
             <path d="M8 2v4" />
             <path d="M3 10h18" />
+        </chakra.svg>
+    );
+}
+
+function LeaderboardIcon(props: ChakraIconProps) {
+    return (
+        <chakra.svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            {...props}
+        >
+            <path d="M8 6h13" />
+            <path d="M8 12h13" />
+            <path d="M8 18h13" />
+            <path d="M3 6h.01" />
+            <path d="M3 12h.01" />
+            <path d="M3 18h.01" />
         </chakra.svg>
     );
 }
