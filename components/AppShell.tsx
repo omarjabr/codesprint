@@ -7,6 +7,7 @@ import {
     Flex,
     Link as ChakraLink,
     Text,
+    Portal,
     TooltipContent,
     TooltipPositioner,
     TooltipRoot,
@@ -516,21 +517,26 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                             );
 
                                     return (
-                                        <TooltipRoot key={item.label}>
+                                        <TooltipRoot key={item.label} positioning={{ strategy: "fixed", placement: "bottom" }}>
                                             <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-                                            <TooltipPositioner>
-                                                <TooltipContent
-                                                    px={2}
-                                                    py={1}
-                                                    borderRadius="var(--radius-sm)"
-                                                    bg="var(--surface)"
-                                                    color="var(--header-text)"
-                                                    border="1px solid var(--border)"
-                                                    fontSize="xs"
-                                                >
-                                                    {item.label}
-                                                </TooltipContent>
-                                            </TooltipPositioner>
+                                            {/* Portaled so the header's collapse clip and backdrop
+                                                don't cut the label off or paint it under the page. */}
+                                            <Portal>
+                                                <TooltipPositioner zIndex={50}>
+                                                    <TooltipContent
+                                                        px={2}
+                                                        py={1}
+                                                        borderRadius="var(--radius-sm)"
+                                                        bg="var(--surface)"
+                                                        color="var(--header-text)"
+                                                        border="1px solid var(--border)"
+                                                        fontSize="xs"
+                                                        zIndex={50}
+                                                    >
+                                                        {item.label}
+                                                    </TooltipContent>
+                                                </TooltipPositioner>
+                                            </Portal>
                                         </TooltipRoot>
                                     );
                                 })}

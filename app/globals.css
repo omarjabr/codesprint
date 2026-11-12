@@ -256,6 +256,11 @@ main {
 
 .app-header > * {
     min-height: 0;
+}
+
+/* Clip only while the row is closing. Overflow hidden while the header is open
+   cuts off the icon tooltips. */
+body.cs-focus-active .app-header > * {
     overflow: hidden;
 }
 
