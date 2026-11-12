@@ -536,6 +536,21 @@ describe("useTypingEngine", () => {
         expect(keys).toContain("setPhase");
     });
 
+    it("auto-closes an angle bracket the way it closes a parenthesis", () => {
+        const snippet = makeSnippet("unique<T>");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            for (const key of ["u", "n", "i", "q", "u", "e", "<"]) {
+                result.current.handleKeyDown(fireKey(key));
+            }
+        });
+
+        expect(result.current.cursorIndex).toBe(7);
+        expect([...result.current.autoClosedChars]).toEqual([8]);
+        expect(result.current.wrongChars.size).toBe(0);
+    });
+
     it("inserts the matching closer when an opener is typed and removes it on backspace", () => {
         const snippet = makeSnippet("call(bar)");
         const { result } = renderHook(() => useTypingEngine({ snippet }));
@@ -613,6 +628,33 @@ describe("useTypingEngine", () => {
 
         expect(result.current.cursorIndex).toBe(0);
         expect(result.current.progressIndex).toBe(8);
+        expect(result.current.phase).toBe("running");
+    });
+
+    it("alt-arrows jump between words without counting a keystroke", () => {
+        const snippet = makeSnippet("hello world\nnext");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            for (const key of "hello world") {
+                result.current.handleKeyDown(fireKey(key));
+            }
+            result.current.handleKeyDown(fireKey("ArrowLeft", { altKey: true }));
+            result.current.handleKeyDown(fireKey("ArrowLeft", { altKey: true }));
+        });
+
+        expect(result.current.cursorIndex).toBe(0);
+        expect(result.current.progressIndex).toBe(11);
+        expect(result.current.totalKeystrokes).toBe(11);
+        expect(result.current.wrongChars.size).toBe(0);
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("ArrowRight", { altKey: true }));
+            result.current.handleKeyDown(fireKey("ArrowRight", { altKey: true }));
+        });
+
+        expect(result.current.cursorIndex).toBe(11);
+        expect(result.current.progressIndex).toBe(11);
         expect(result.current.phase).toBe("running");
     });
 

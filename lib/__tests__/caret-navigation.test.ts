@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedCaretPositions, jumpCaret, moveCaret, progressAfterCaretJump } from "@/lib/caret-navigation";
+import { allowedCaretPositions, jumpCaret, jumpWord, moveCaret, progressAfterCaretJump } from "@/lib/caret-navigation";
 
 describe("allowedCaretPositions", () => {
     it("includes the typed prefix and an auto-closed closer ahead of it", () => {
@@ -83,7 +83,44 @@ describe("jumpCaret", () => {
         const end = jumpCaret(content, 2, 5, [8], "right");
         expect(end.cursor).toBe(5);
     });
+});
 
+describe("jumpWord", () => {
+    it("steps to the end of each typed word and then back to the start", () => {
+        const content = "hello world\nnext";
+        const endOfHello = jumpWord(content, 2, 11, [], "right");
+        expect(endOfHello.cursor).toBe(5);
+
+        const endOfWorld = jumpWord(content, endOfHello.cursor, 11, [], "right");
+        expect(endOfWorld.cursor).toBe(11);
+
+        const startOfWorld = jumpWord(content, endOfWorld.cursor, 11, [], "left");
+        expect(startOfWorld.cursor).toBe(6);
+
+        const startOfHello = jumpWord(content, startOfWorld.cursor, 11, [], "left");
+        expect(startOfHello.cursor).toBe(0);
+    });
+
+    it("stops at the end of the word that has been typed", () => {
+        const content = "hello world";
+        const end = jumpWord(content, 2, 8, [], "right");
+        expect(end.cursor).toBe(5);
+
+        const typedEnd = jumpWord(content, end.cursor, 8, [], "right");
+        expect(typedEnd.cursor).toBe(8);
+    });
+
+    it("does not cross untyped text to reach a later closer", () => {
+        const content = "call(bar)";
+        const end = jumpWord(content, 1, 5, [8], "right");
+        expect(end.cursor).toBe(4);
+
+        const frontier = jumpWord(content, end.cursor, 5, [8], "right");
+        expect(frontier.cursor).toBe(5);
+    });
+});
+
+describe("progressAfterCaretJump", () => {
     it("extends progress only across a closer that is already the next character", () => {
         expect(progressAfterCaretJump(1, 2, 1, [1])).toBe(2);
         expect(progressAfterCaretJump(5, 9, 5, [8])).toBe(5);

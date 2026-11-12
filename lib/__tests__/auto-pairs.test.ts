@@ -30,4 +30,38 @@ describe("findAutoCloseIndices", () => {
         expect(findAutoCloseIndices("()", 1, "javascript")).toEqual([]);
         expect(findAutoCloseIndices("a < b", 2, "javascript")).toEqual([]);
     });
+
+    it("pairs angle brackets, including an empty pair and a nested close", () => {
+        expect(findAutoCloseIndices("unique<T>", 6, "javascript")).toEqual([8]);
+        expect(findAutoCloseIndices("box<>", 3, "java")).toEqual([4]);
+        expect(findAutoCloseIndices("vector<vector<int>>", 6, "cpp")).toEqual([18]);
+        expect(findAutoCloseIndices("vector<vector<int>>", 13, "cpp")).toEqual([17]);
+    });
+
+    it("does not treat a comparison or a shift as an angle bracket", () => {
+        expect(findAutoCloseIndices("a <= b", 2, "javascript")).toEqual([]);
+        expect(findAutoCloseIndices("a << b", 2, "cpp")).toEqual([]);
+        expect(findAutoCloseIndices("a << b", 3, "cpp")).toEqual([]);
+        expect(findAutoCloseIndices("a >= b", 2, "javascript")).toEqual([]);
+
+        const chained = "a < b > c";
+        expect(findAutoCloseIndices(chained, chained.indexOf("<"), "javascript")).toEqual([]);
+
+        const laterGeneric = "index < values.length; list<T>()";
+        expect(findAutoCloseIndices(laterGeneric, laterGeneric.indexOf("<"), "javascript")).toEqual([]);
+        expect(findAutoCloseIndices(laterGeneric, laterGeneric.lastIndexOf("<"), "javascript")).toEqual([
+            laterGeneric.indexOf(">"),
+        ]);
+    });
+
+    it("still pairs an include, a template, and a generic before a name", () => {
+        const include = "#include <array>";
+        expect(findAutoCloseIndices(include, include.indexOf("<"), "cpp")).toEqual([include.indexOf(">")]);
+
+        const template = "template <typename T, std::size_t N>";
+        expect(findAutoCloseIndices(template, template.indexOf("<"), "cpp")).toEqual([template.lastIndexOf(">")]);
+
+        const map = "Map<String, Object> context";
+        expect(findAutoCloseIndices(map, map.indexOf("<"), "java")).toEqual([map.indexOf(">")]);
+    });
 });

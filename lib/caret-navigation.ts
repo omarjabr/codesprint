@@ -156,6 +156,89 @@ export function jumpCaret(
     return { cursor: next, preferredColumn: columnAt(content, next) };
 }
 
+function isWordChar(char: string | undefined): boolean {
+    if (char === undefined) return false;
+    return /[A-Za-z0-9_]/.test(char);
+}
+
+/**
+ * The unbroken run of written caret slots that contains `cursor`.
+ * A gap of untyped template text splits the runs, so a word jump cannot
+ * cross it.
+ */
+function runContaining(positions: readonly number[], cursor: number): { floor: number; limit: number } | null {
+    if (positions.length === 0) return null;
+    const runs: Array<{ floor: number; limit: number }> = [];
+    let floor = positions[0];
+    let previous = positions[0];
+    for (let index = 1; index < positions.length; index += 1) {
+        const position = positions[index];
+        if (position > previous + 1) {
+            runs.push({ floor, limit: previous });
+            floor = position;
+        }
+        previous = position;
+    }
+    runs.push({ floor, limit: previous });
+
+    for (const run of runs) {
+        if (cursor >= run.floor && cursor <= run.limit) return run;
+    }
+    for (let index = runs.length - 1; index >= 0; index -= 1) {
+        if (runs[index].limit <= cursor) return runs[index];
+    }
+    return runs[0];
+}
+
+/** Caret index just after the word that starts at or after `cursor`. */
+function nextWordEnd(content: string, cursor: number, limit: number): number {
+    let index = cursor;
+    if (isWordChar(content[index])) {
+        while (index < limit && isWordChar(content[index])) index += 1;
+        return index;
+    }
+    while (index < limit && !isWordChar(content[index])) index += 1;
+    while (index < limit && isWordChar(content[index])) index += 1;
+    return index;
+}
+
+/** Caret index at the start of the word before `cursor`, or of the word the caret is in. */
+function previousWordStart(content: string, cursor: number, floor: number): number {
+    let index = cursor;
+    if (index > floor && isWordChar(content[index - 1])) {
+        while (index > floor && isWordChar(content[index - 1])) index -= 1;
+        return index;
+    }
+    while (index > floor && !isWordChar(content[index - 1])) index -= 1;
+    while (index > floor && isWordChar(content[index - 1])) index -= 1;
+    return index;
+}
+
+/**
+ * Option+Left/Right on Mac, and Alt+Left/Right on Windows.
+ *
+ * Right lands at the end of the current word, then the next one. Left lands
+ * at the start of the current word, then the previous one. Both stay inside
+ * text the user has already typed.
+ */
+export function jumpWord(
+    content: string,
+    cursor: number,
+    progressIndex: number,
+    autoClosed: readonly number[],
+    direction: "left" | "right",
+): { cursor: number; preferredColumn: number } {
+    const allowed = allowedCaretPositions(content.length, progressIndex, autoClosed);
+    const run = runContaining(allowed, cursor);
+    if (!run) {
+        return { cursor, preferredColumn: columnAt(content, cursor) };
+    }
+    const next = direction === "right"
+        ? nextWordEnd(content, cursor, run.limit)
+        : previousWordStart(content, cursor, run.floor);
+    return { cursor: next, preferredColumn: columnAt(content, next) };
+}
+
 /**
  * How far a forward jump may extend the typed run.
  *

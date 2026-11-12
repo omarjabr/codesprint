@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findAutoCloseIndices } from "@/lib/auto-pairs";
-import { columnAt, isCaretArrowKey, jumpCaret, moveCaret, progressAfterCaretJump } from "@/lib/caret-navigation";
+import { columnAt, isCaretArrowKey, jumpCaret, jumpWord, moveCaret, progressAfterCaretJump } from "@/lib/caret-navigation";
 import { computeMetrics, createPatternScoreCalculator, type Metrics } from "@/lib/scoring";
 import type { Snippet } from "@/lib/snippets";
 import { tokenize } from "@/lib/tokenizer";
@@ -503,12 +503,13 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         // Arrow keys move through text already written, including an auto-closed
         // closer, and stop at template text that has not been typed yet.
         if (isCaretArrowKey(e.key)) {
-            // Cmd on Mac and Ctrl on Windows jump within the typed line.
-            // Plain arrows still move one character. Alt is left alone.
-            const lineJump = (e.metaKey || e.ctrlKey)
-                && !e.altKey
-                && (e.key === "ArrowLeft" || e.key === "ArrowRight");
-            if ((e.metaKey || e.ctrlKey || e.altKey) && !lineJump) return;
+            // Cmd/Ctrl + Left/Right jumps along the typed line.
+            // Option on Mac and Alt on Windows jump between typed words.
+            // Plain arrows still move one character.
+            const horizontal = e.key === "ArrowLeft" || e.key === "ArrowRight";
+            const wordJump = e.altKey && !e.metaKey && !e.ctrlKey && horizontal;
+            const lineJump = (e.metaKey || e.ctrlKey) && !e.altKey && horizontal;
+            if ((e.metaKey || e.ctrlKey || e.altKey) && !lineJump && !wordJump) return;
             e.preventDefault();
             e.stopPropagation();
             if (phaseNow !== "running" && phaseNow !== "finished") return;
@@ -517,15 +518,19 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             const before = cursorIndexRef.current;
             const progress = progressIndexRef.current;
             const closed = readAutoClosed();
-            const moved = lineJump
-                ? jumpCaret(content, before, progress, closed, e.key === "ArrowRight" ? "right" : "left")
-                : moveCaret(content, before, progress, closed, e.key, preferredColumnRef.current);
+            const direction = e.key === "ArrowRight" ? "right" : "left";
+            const moved = wordJump
+                ? jumpWord(content, before, progress, closed, direction)
+                : lineJump
+                    ? jumpCaret(content, before, progress, closed, direction)
+                    : moveCaret(content, before, progress, closed, e.key, preferredColumnRef.current);
             const steppedOverCloser = !lineJump
+                && !wordJump
                 && e.key === "ArrowRight"
                 && before === progress
                 && moved.cursor === before + 1
                 && closed.includes(before);
-            const nextProgress = lineJump
+            const nextProgress = lineJump || wordJump
                 ? progressAfterCaretJump(before, moved.cursor, progress, closed)
                 : steppedOverCloser
                     ? moved.cursor
