@@ -431,14 +431,9 @@ export default function TypingSession() {
                                                 onNextProblem={handleNextProblem}
                                             />
 
-                                            {/* Live Stats (during running) */}
+                                            {/* Live stats span the code column: labels at the edges, no card. */}
                                             {showRunningStats && (
-                                                // Left-aligned with the code panel below it: centred, the
-                                                // card floated over left-aligned code with nothing to
-                                                // line up against.
-                                                <Box alignSelf="flex-start" width="100%" maxW="md">
-                                                    <LiveStats wpm={engine.metrics.adjustedWpm} accuracy={engine.metrics.accuracy} />
-                                                </Box>
+                                                <LiveStats wpm={engine.metrics.adjustedWpm} accuracy={engine.metrics.accuracy} />
                                             )}
 
                                             {/* Code Panel — reserve the editor's real height so the

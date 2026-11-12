@@ -42,16 +42,7 @@ function LiveStats({ wpm, accuracy, label = "Live WPM" }: LiveStatsProps) {
     }, [roundedWpm, roundedAccuracy]);
 
     return (
-        <Box
-            borderRadius="16px"
-            border="1px solid var(--border)"
-            bg="var(--panel-glass)"
-            backdropFilter="blur(12px)"
-            px={6}
-            py={4}
-            minW="260px"
-            color="var(--text)"
-        >
+        <Box w="100%" color="var(--text)">
             <Flex justify="space-between" fontSize="sm" color="var(--text-subtle)" mb={1}>
                 <Text>{label}</Text>
                 <Text>Accuracy</Text>
