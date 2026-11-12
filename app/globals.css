@@ -80,6 +80,22 @@ body {
     min-width: 0;
 }
 
+/* This rule is unlayered, so it beats Chakra's layered min-width and squashes
+   the overlay close control down to the glyph. Pin it back to a square so the
+   hover fill is a circle. */
+.chakra-drawer__closeTrigger,
+.chakra-dialog__closeTrigger {
+    box-sizing: border-box;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 #__next,
 main {
     min-height: 100%;

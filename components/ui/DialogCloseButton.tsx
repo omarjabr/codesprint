@@ -12,13 +12,21 @@ import { CloseButton, DialogCloseTrigger, DrawerCloseTrigger } from "@chakra-ui/
  *
  * A bare `<DialogCloseTrigger />` renders an empty, unlabelled button (Chakra
  * forwards children through `asChild`), so it must always wrap a real control.
+ *
+ * The hover fill is the button box. It has to be a square with a full radius,
+ * otherwise the global min-width reset turns it into a tall pill.
  */
 const closeButtonProps = {
     size: "sm",
     "aria-label": "Close",
     top: "4",
     insetEnd: "4",
-    borderRadius: "var(--radius-sm)",
+    boxSize: "9",
+    minW: "9",
+    w: "9",
+    h: "9",
+    p: "0",
+    borderRadius: "full",
     color: "var(--text-subtle)",
     _hover: { bg: "var(--surface-hover)", color: "var(--text)" },
 } as const;
