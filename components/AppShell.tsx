@@ -344,7 +344,6 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
             color="var(--header-text)"
             bg="var(--header-bg)"
             backdropFilter="blur(18px)"
-            borderBottom="1px solid var(--header-border)"
         >
             <m.div {...headerMotion}>
                 <Container maxW="1280px" px={{ base: 4, md: 8 }} py={{ base: 2, md: 3 }}>

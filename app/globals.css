@@ -241,15 +241,44 @@ main {
     gap: clamp(16px, 2.4vw, 24px);
 }
 
+/* Grid row so a run can collapse the header out of the layout. Opacity alone
+   left the sticky bar's height as an empty band above the editor. */
 .app-header {
-    transition: opacity 0.35s ease, transform 0.35s ease, filter 0.35s ease;
+    display: grid;
+    grid-template-rows: 1fr;
+    visibility: visible;
+    transition:
+        opacity 0.35s ease,
+        filter 0.35s ease,
+        grid-template-rows 0.35s ease,
+        visibility 0s linear 0s;
+}
+
+.app-header > * {
+    min-height: 0;
+    overflow: hidden;
 }
 
 body.cs-focus-active .app-header {
     opacity: 0;
-    transform: translateY(-40px);
     filter: blur(12px);
     pointer-events: none;
+    grid-template-rows: 0fr;
+    overflow: hidden;
+    /* Stay focusable until the row has finished closing, then drop out. */
+    visibility: hidden;
+    transition:
+        opacity 0.35s ease,
+        filter 0.35s ease,
+        grid-template-rows 0.35s ease,
+        visibility 0s linear 0.35s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-header,
+    body.cs-focus-active .app-header {
+        transition: none;
+    }
 }
 
 /* Hide Next.js dev badge */
