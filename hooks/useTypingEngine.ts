@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findAutoCloseIndices } from "@/lib/auto-pairs";
+import { columnAt, isCaretArrowKey, moveCaret } from "@/lib/caret-navigation";
 import { computeMetrics, createPatternScoreCalculator, type Metrics } from "@/lib/scoring";
 import type { Snippet } from "@/lib/snippets";
 import { tokenize } from "@/lib/tokenizer";
@@ -68,6 +69,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     const [phase, setPhase] = useState<Phase>("idle");
     const [countdown, setCountdown] = useState<number | null>(null);
     const [cursorIndex, setCursorIndex] = useState(0);
+    // How far the user has actually typed. The caret may move behind this, and
+    // ahead of it only onto a closer the editor already inserted.
+    const [progressIndex, setProgressIndex] = useState(0);
     // Mutable ref for O(1) updates during keystrokes (no Set cloning)
     const wrongCharsRef = useRef(new Set<number>());
     // Published snapshot for React consumers. It used to be re-cloned 10x/sec by a
@@ -118,6 +122,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     const phaseRef = useRef(phase);
     const startTimeRef = useRef(startTime);
     const cursorIndexRef = useRef(cursorIndex);
+    const progressIndexRef = useRef(progressIndex);
+    // Column a vertical move should return to after a shorter line.
+    const preferredColumnRef = useRef(0);
     const snippetRef = useRef(snippet);
     // Counters mirrored SYNCHRONOUSLY alongside their setState calls so metrics can
     // be computed inside the keystroke handler (React state is one commit behind).
@@ -187,7 +194,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             const elapsed = nowTs - start;
             if (elapsed < 1000) return;
 
-            const cursor = cursorIndexRef.current;
+            const cursor = progressIndexRef.current;
             const strokes = countersRef.current.totalKeystrokes;
             const wrongCharsSize = wrongCharsRef.current.size;
 
@@ -224,6 +231,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     const reset = useCallback(() => {
         phaseRef.current = "idle";
         cursorIndexRef.current = 0;
+        progressIndexRef.current = 0;
+        preferredColumnRef.current = 0;
         startTimeRef.current = null;
         countersRef.current = { totalTypedChars: 0, totalKeystrokes: 0, correctKeystrokes: 0 };
         errorLogRef.current = [];
@@ -238,6 +247,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         setPhase("idle");
         setCountdown(null);
         setCursorIndex(0);
+        setProgressIndex(0);
         setPublishedWrongChars(new Set());
         setAutoClosedChars(new Set());
         setStartTime(null);
@@ -301,7 +311,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
     // Pure metric computation from the synchronous refs, for an explicit elapsed.
     const buildMetrics = useCallback((elapsed: number): Metrics => {
-        const idx = cursorIndexRef.current;
+        const idx = progressIndexRef.current;
         const snippetContent = snippetRef.current.content;
         const wrongChars = wrongCharsRef.current;
         const { totalTypedChars: typed, totalKeystrokes: strokes, correctKeystrokes: correct } = countersRef.current;
@@ -373,7 +383,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             wrongChars,
             errorLog: [...errorLogRef.current],
             history: [...historyRef.current],
-            cursorIndex: cursorIndexRef.current,
+            cursorIndex: progressIndexRef.current,
             totalKeystrokes: countersRef.current.totalKeystrokes,
             correctKeystrokes: countersRef.current.correctKeystrokes,
         });
@@ -430,8 +440,95 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             }
         };
 
+        const placeCaret = (index: number, extendProgress: boolean) => {
+            cursorIndexRef.current = index;
+            setCursorIndex(index);
+            preferredColumnRef.current = columnAt(snippetRef.current.content, index);
+            if (!extendProgress) return;
+            progressIndexRef.current = index;
+            setProgressIndex(index);
+        };
+
+        const readAutoClosed = (): number[] => {
+            const indices: number[] = [];
+            for (const closers of autoClosedRef.current.values()) {
+                for (const index of closers) indices.push(index);
+            }
+            return indices;
+        };
+
+        const rememberPair = (index: number, ok: boolean) => {
+            if (!ok) {
+                if (autoClosedRef.current.delete(index)) autoClosedDirtyRef.current = true;
+                return;
+            }
+            const snippetNow = snippetRef.current;
+            const closers = findAutoCloseIndices(snippetNow.content, index, snippetNow.language);
+            if (closers.length > 0) {
+                autoClosedRef.current.set(index, closers);
+                autoClosedDirtyRef.current = true;
+                return;
+            }
+            if (autoClosedRef.current.delete(index)) autoClosedDirtyRef.current = true;
+        };
+
+        const recordMistake = (index: number, expected: string, got: string) => {
+            markWrong(index);
+            flagCaretError();
+            const nextErrors = [...errorLogRef.current, { expected, got, index }];
+            if (nextErrors.length > 200) nextErrors.shift();
+            errorLogRef.current = nextErrors;
+            setErrorLog(nextErrors);
+        };
+
+        const countKeystroke = () => {
+            countersRef.current.totalKeystrokes += 1;
+            setTotalKeystrokes(prev => prev + 1);
+        };
+
+        const countCorrect = () => {
+            countersRef.current.correctKeystrokes += 1;
+            setCorrectKeystrokes(prev => prev + 1);
+        };
+
+        const maybeFinish = (index: number, at: number) => {
+            if (!shouldFinishAtIndex(index, snippetRef.current.content)) return;
+            finishRun(at);
+            if (onFinish) onFinish();
+        };
+
         // Ignore modifiers
         if (e.key === "Meta" || e.key === "Alt" || e.key === "Control") return;
+
+        // Arrow keys move through text already written, including an auto-closed
+        // closer, and stop at template text that has not been typed yet.
+        if (isCaretArrowKey(e.key)) {
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (phaseNow !== "running" && phaseNow !== "finished") return;
+
+            const content = snippetRef.current.content;
+            const before = cursorIndexRef.current;
+            const progress = progressIndexRef.current;
+            const closed = readAutoClosed();
+            const moved = moveCaret(content, before, progress, closed, e.key, preferredColumnRef.current);
+            const steppedOverCloser = e.key === "ArrowRight"
+                && before === progress
+                && moved.cursor === before + 1
+                && closed.includes(before);
+            preferredColumnRef.current = moved.preferredColumn;
+            if (moved.cursor !== before) {
+                cursorIndexRef.current = moved.cursor;
+                setCursorIndex(moved.cursor);
+            }
+            if (steppedOverCloser) {
+                progressIndexRef.current = moved.cursor;
+                setProgressIndex(moved.cursor);
+                maybeFinish(moved.cursor, Date.now());
+            }
+            return;
+        }
 
         // Handle Tab
         if (e.key === "Tab") {
@@ -458,9 +555,12 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 }
             }
 
+            // Tab only types at the frontier. In the middle of written text it would
+            // skip characters the user has already entered.
+            if (cursorIndexRef.current !== progressIndexRef.current) return;
+
             // Tab counts as a keystroke? Usually yes.
-            countersRef.current.totalKeystrokes += 1;
-            setTotalKeystrokes(prev => prev + 1);
+            countKeystroke();
 
             const startIndex = cursorIndexRef.current;
             const content = snippetRef.current.content;
@@ -471,9 +571,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (auto.advanced > 0) {
                 const advancedIndex = auto.nextIndex;
 
-                // Apply updates for auto-advance
-                cursorIndexRef.current = advancedIndex;
-                setCursorIndex(advancedIndex);
+                placeCaret(advancedIndex, true);
                 countersRef.current.totalTypedChars += auto.advanced;
                 for (let i = startIndex; i < advancedIndex; i++) clearWrong(i);
 
@@ -491,12 +589,10 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             }
 
             if (advanced > 0) {
-                cursorIndexRef.current = startIndex + advanced;
-                setCursorIndex(cursorIndexRef.current);
+                placeCaret(startIndex + advanced, true);
                 countersRef.current.totalTypedChars += advanced;
                 // Manual tab is a correct action
-                countersRef.current.correctKeystrokes += 1;
-                setCorrectKeystrokes(prev => prev + 1);
+                countCorrect();
                 for (let i = 0; i < advanced; i++) clearWrong(startIndex + i);
                 return;
             }
@@ -504,11 +600,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             // 3. Manual Tab (literal tab character)
             const expected = content[startIndex];
             if (expected === "\t") {
-                cursorIndexRef.current = startIndex + 1;
-                setCursorIndex(cursorIndexRef.current);
+                placeCaret(startIndex + 1, true);
                 countersRef.current.totalTypedChars += 1;
-                countersRef.current.correctKeystrokes += 1;
-                setCorrectKeystrokes(prev => prev + 1);
+                countCorrect();
                 clearWrong(startIndex);
             }
             return;
@@ -530,6 +624,27 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             return;
         }
 
+        // Backspace behind the typed frontier only moves the caret. Deleting
+        // there would erase text the user has already written past the caret.
+        if (e.key === "Backspace" && cursorIndexRef.current !== progressIndexRef.current) {
+            swallowEvent();
+            const content = snippetRef.current.content;
+            const moved = moveCaret(
+                content,
+                cursorIndexRef.current,
+                progressIndexRef.current,
+                readAutoClosed(),
+                "ArrowLeft",
+                preferredColumnRef.current,
+            );
+            preferredColumnRef.current = moved.preferredColumn;
+            if (moved.cursor !== cursorIndexRef.current) {
+                cursorIndexRef.current = moved.cursor;
+                setCursorIndex(moved.cursor);
+            }
+            return;
+        }
+
         if (phaseNow === "idle") {
             // Update ref immediately to prevent race conditions with rapid keystrokes
             phaseRef.current = "running";
@@ -543,9 +658,27 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             }
         }
 
+        // A closer sitting ahead of the typed run is already written. Stepping
+        // on it with the matching character moves past it; any other key,
+        // including space, is ignored so it is not marked wrong.
+        if (cursorIndexRef.current > progressIndexRef.current) {
+            swallowEvent();
+            const index = cursorIndexRef.current;
+            const expected = snippetRef.current.content[index];
+            const got = e.key === "Enter" ? "\n" : e.key;
+            const closed = readAutoClosed();
+            if (
+                expected !== undefined
+                && closed.includes(index)
+                && normalizeWhitespace(got) === normalizeWhitespace(expected)
+            ) {
+                placeCaret(index + 1, false);
+            }
+            return;
+        }
+
         // Count every actionable key press as a keystroke
-        countersRef.current.totalKeystrokes += 1;
-        setTotalKeystrokes(prev => prev + 1);
+        countKeystroke();
 
         if (e.key === "Backspace") {
             if (phaseNow === "finished") {
@@ -557,8 +690,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (currentCursor === 0) return;
 
             const targetIndex = currentCursor - 1;
-            cursorIndexRef.current = targetIndex;
-            setCursorIndex(targetIndex);
+            placeCaret(targetIndex, true);
             clearWrong(targetIndex);
             // Deleting the opener removes the closer the editor inserted with it.
             if (autoClosedRef.current.delete(targetIndex)) {
@@ -567,15 +699,18 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             return;
         }
 
-        // Regular typing
-        const { nextIndex: currentIndex, advanced } = autoAdvanceIndentationIfAllowed(cursorIndexRef.current);
+        const atFrontier = cursorIndexRef.current === progressIndexRef.current;
+        let currentIndex = cursorIndexRef.current;
 
-        // If auto-advance happened
-        if (advanced > 0) {
-            cursorIndexRef.current = currentIndex;
-            setCursorIndex(currentIndex);
-            countersRef.current.totalTypedChars += advanced;
-            for (let i = currentIndex - advanced; i < currentIndex; i++) clearWrong(i);
+        // Indent is skipped only when typing forward at the end of what was written.
+        if (atFrontier) {
+            const advanced = autoAdvanceIndentationIfAllowed(currentIndex);
+            if (advanced.advanced > 0) {
+                currentIndex = advanced.nextIndex;
+                placeCaret(currentIndex, true);
+                countersRef.current.totalTypedChars += advanced.advanced;
+                for (let i = currentIndex - advanced.advanced; i < currentIndex; i++) clearWrong(i);
+            }
         }
 
         const expected = snippetRef.current.content[currentIndex];
@@ -589,33 +724,20 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         const ok = normalizeWhitespace(got) === normalizeWhitespace(expected);
 
         const newCursor = currentIndex + 1;
-        cursorIndexRef.current = newCursor;
-        setCursorIndex(newCursor);
-        countersRef.current.totalTypedChars += 1;
+        // Retyping earlier text moves the caret without extending how far the run has reached.
+        placeCaret(newCursor, atFrontier);
+        if (atFrontier) countersRef.current.totalTypedChars += 1;
 
         if (ok) {
-            countersRef.current.correctKeystrokes += 1;
-            setCorrectKeystrokes(prev => prev + 1);
+            countCorrect();
             clearWrong(currentIndex);
-            const snippetNow = snippetRef.current;
-            const closers = findAutoCloseIndices(snippetNow.content, currentIndex, snippetNow.language);
-            if (closers.length > 0) {
-                autoClosedRef.current.set(currentIndex, closers);
-                autoClosedDirtyRef.current = true;
-            }
+            rememberPair(currentIndex, true);
         } else {
-            markWrong(currentIndex);
-            flagCaretError();
-            const nextErrors = [...errorLogRef.current, { expected, got, index: currentIndex }];
-            if (nextErrors.length > 200) nextErrors.shift();
-            errorLogRef.current = nextErrors;
-            setErrorLog(nextErrors);
+            rememberPair(currentIndex, false);
+            recordMistake(currentIndex, expected, got);
         }
 
-        if (shouldFinishAtIndex(newCursor, snippetRef.current.content)) {
-            finishRun(timestamp);
-            if (onFinish) onFinish();
-        }
+        if (atFrontier) maybeFinish(newCursor, timestamp);
     }, [autoAdvanceIndentationIfAllowed, clearWrong, finishRun, flagCaretError, markWrong, onFinish, preferences.vimMode]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -673,6 +795,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         phase,
         countdown,
         cursorIndex,
+        /** End of the contiguous text the user has typed. The caret may sit behind this. */
+        progressIndex,
         wrongChars: publishedWrongChars,
         /** Closers inserted with an opener. Highlighted before the caret reaches them. */
         autoClosedChars,

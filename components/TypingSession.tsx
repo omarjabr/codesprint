@@ -301,7 +301,7 @@ export default function TypingSession() {
         [controls.snippet.content, editorFontSize],
     );
     const total = controls.snippet.content.length;
-    const progress = total === 0 ? 0 : Math.min(1, engine.cursorIndex / total);
+    const progress = total === 0 ? 0 : Math.min(1, engine.progressIndex / total);
 
     const layoutGap = getLayoutGap(isTerminalMode, isImmersive);
     const panelMotion = getPanelMotion(prefersReducedMotion);
@@ -459,6 +459,7 @@ export default function TypingSession() {
                                                 <CodePanel
                                                     content={controls.snippet.content}
                                                     cursorChar={engine.cursorIndex}
+                                                    typedThrough={engine.progressIndex}
                                                     wrongChars={engine.wrongChars}
                                                     autoClosedChars={engine.autoClosedChars}
                                                     language={controls.language}

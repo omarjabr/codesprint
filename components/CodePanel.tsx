@@ -40,6 +40,8 @@ type MonacoModule = typeof import("monaco-editor");
 type CodePanelProps = {
     content: string;
     cursorChar: number;
+    /** End of the text already typed. Completed highlighting follows this, not the caret. */
+    typedThrough: number;
     wrongChars: Set<number>;
     autoClosedChars: ReadonlySet<number>;
     language: "javascript" | "python" | "java" | "cpp";
@@ -82,6 +84,7 @@ if (typeof window !== "undefined") {
 function CodePanel({
     content,
     cursorChar,
+    typedThrough,
     wrongChars,
     autoClosedChars,
     language,
@@ -133,9 +136,10 @@ function CodePanel({
     // "visible" so a browser without IntersectionObserver never warns about
     // lines the reader can already see.
     const [tailOnScreen, setTailOnScreen] = useState(true);
-    // cursorChar > 0 keeps the chip out of the idle screen: before the first
-    // keystroke there is no countdown to report.
-    const showLineCountdown = !tailOnScreen && linesRemaining > 0 && cursorChar > 0;
+    // typedThrough > 0 keeps the chip out of the idle screen: before the first
+    // keystroke there is no countdown to report. The caret can move back to 0
+    // without hiding it.
+    const showLineCountdown = !tailOnScreen && linesRemaining > 0 && typedThrough > 0;
     const triggerCaretActivity = useCallback(() => {
         const caretNode = caretNodeRef.current;
         if (!caretNode) return;
@@ -500,9 +504,9 @@ function CodePanel({
         const model = editor.getModel();
         if (!model) return;
 
-        const caretIndex = Math.max(0, Math.min(cursorChar, content.length));
+        const typedIndex = Math.max(0, Math.min(typedThrough, content.length));
 
-        const completedDecorations: Monaco.editor.IModelDeltaDecoration[] = getCompletedRanges(caretIndex, sortedWrongChars, sortedAutoClosed)
+        const completedDecorations: Monaco.editor.IModelDeltaDecoration[] = getCompletedRanges(typedIndex, sortedWrongChars, sortedAutoClosed)
             .map(([start, end]) => {
                 const startPos = model.getPositionAt(start);
                 const endPos = model.getPositionAt(end);
@@ -524,7 +528,7 @@ function CodePanel({
             ...completedDecorations,
             ...errorDecorations,
         ]);
-    }, [cursorChar, sortedAutoClosed, sortedWrongChars, content, editorReadyToken, ensureCaretNode]);
+    }, [typedThrough, sortedAutoClosed, sortedWrongChars, content, editorReadyToken, ensureCaretNode]);
 
     useEffect(() => {
         const editorRefCapture = editorRef;

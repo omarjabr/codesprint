@@ -588,4 +588,142 @@ describe("useTypingEngine", () => {
         expect(tripleHook.result.current.cursorIndex).toBe(1);
         expect([...tripleHook.result.current.autoClosedChars]).toEqual([5, 6, 7]);
     });
+
+    it("does not start a run from an arrow key", () => {
+        const snippet = makeSnippet("hello");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("ArrowRight"));
+            result.current.handleKeyDown(fireKey("ArrowDown"));
+        });
+
+        expect(result.current.phase).toBe("idle");
+        expect(result.current.cursorIndex).toBe(0);
+        expect(result.current.totalKeystrokes).toBe(0);
+    });
+
+    it("moves through written characters and stops at untyped text", () => {
+        const snippet = makeSnippet("ab\ncd");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("a"));
+            result.current.handleKeyDown(fireKey("b"));
+            result.current.handleKeyDown(fireKey("ArrowRight"));
+            result.current.handleKeyDown(fireKey("ArrowDown"));
+        });
+
+        expect(result.current.cursorIndex).toBe(2);
+        expect(result.current.progressIndex).toBe(2);
+        expect(result.current.totalKeystrokes).toBe(2);
+        expect(result.current.wrongChars.size).toBe(0);
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("ArrowLeft"));
+        });
+
+        expect(result.current.cursorIndex).toBe(1);
+        expect(result.current.progressIndex).toBe(2);
+    });
+
+    it("moves between written lines and keeps the typed end where it was", () => {
+        const snippet = makeSnippet("ab\ncd");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            for (const key of ["a", "b", "Enter", "c"]) {
+                result.current.handleKeyDown(fireKey(key));
+            }
+            result.current.handleKeyDown(fireKey("ArrowUp"));
+        });
+
+        expect(result.current.cursorIndex).toBe(1);
+        expect(result.current.progressIndex).toBe(4);
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("ArrowDown"));
+        });
+
+        expect(result.current.cursorIndex).toBe(4);
+        expect(result.current.progressIndex).toBe(4);
+        expect(result.current.totalKeystrokes).toBe(4);
+    });
+
+    it("passes an auto-closed closer with the arrow keys without an error", () => {
+        const snippet = makeSnippet("call(bar)");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            for (const key of ["c", "a", "l", "l", "("]) {
+                result.current.handleKeyDown(fireKey(key));
+            }
+            result.current.handleKeyDown(fireKey("ArrowRight"));
+            result.current.handleKeyDown(fireKey(" "));
+            result.current.handleKeyDown(fireKey("ArrowRight"));
+        });
+
+        expect(result.current.cursorIndex).toBe(9);
+        expect(result.current.progressIndex).toBe(5);
+        expect(result.current.totalKeystrokes).toBe(5);
+        expect(result.current.wrongChars.size).toBe(0);
+        expect(result.current.phase).toBe("running");
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("ArrowLeft"));
+            result.current.handleKeyDown(fireKey("ArrowLeft"));
+            for (const key of ["b", "a", "r"]) {
+                result.current.handleKeyDown(fireKey(key));
+            }
+            result.current.handleKeyDown(fireKey("ArrowRight"));
+        });
+
+        expect(result.current.cursorIndex).toBe(9);
+        expect(result.current.progressIndex).toBe(9);
+        expect(result.current.phase).toBe("finished");
+        expect(result.current.wrongChars.size).toBe(0);
+        expect(result.current.totalKeystrokes).toBe(8);
+    });
+
+    it("steps over a closer that is the next character and can finish the snippet", () => {
+        const snippet = makeSnippet("()");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("("));
+            result.current.handleKeyDown(fireKey("ArrowRight"));
+        });
+
+        expect(result.current.cursorIndex).toBe(2);
+        expect(result.current.progressIndex).toBe(2);
+        expect(result.current.phase).toBe("finished");
+        expect(result.current.totalKeystrokes).toBe(1);
+        expect(result.current.wrongChars.size).toBe(0);
+    });
+
+    it("backspace behind the caret moves within written text and does not erase it", () => {
+        const snippet = makeSnippet("hello");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            for (const key of ["h", "e", "l"]) {
+                result.current.handleKeyDown(fireKey(key));
+            }
+            result.current.handleKeyDown(fireKey("ArrowLeft"));
+            result.current.handleKeyDown(fireKey("Backspace"));
+        });
+
+        expect(result.current.cursorIndex).toBe(1);
+        expect(result.current.progressIndex).toBe(3);
+        expect(result.current.totalKeystrokes).toBe(3);
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("ArrowRight"));
+            result.current.handleKeyDown(fireKey("ArrowRight"));
+            result.current.handleKeyDown(fireKey("Backspace"));
+        });
+
+        expect(result.current.cursorIndex).toBe(2);
+        expect(result.current.progressIndex).toBe(2);
+    });
 });
