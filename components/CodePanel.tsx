@@ -271,7 +271,7 @@ function CodePanel({
                     "editor.background": "#00000000",
                     "editor.foreground": fade(theme.text),
                     "editorCursor.foreground": toMonacoColor(theme.caret),
-                    "editor.lineHighlightBackground": toMonacoColor(theme.surface),
+                    "editor.lineHighlightBackground": "#00000000",
                     "editorLineNumber.foreground": toMonacoColor(theme.textSubtle),
                     "editorLineNumber.activeForeground": toMonacoColor(theme.accent),
                     "editor.selectionBackground": toMonacoColor(theme.surfaceActive),

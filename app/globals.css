@@ -117,6 +117,13 @@ main {
     opacity: 0 !important;
 }
 
+/* Monaco still paints a current-line bar in the margin. It reads as a glow
+   beside the caret, so keep that strip empty. */
+.monaco-editor .current-line {
+    background: transparent !important;
+    border: none !important;
+}
+
 .cs-caret {
     position: absolute;
     top: 0;
@@ -136,7 +143,6 @@ main {
     will-change: transform, opacity;
     opacity: 0.92;
     pointer-events: none;
-    box-shadow: 0 0 8px var(--caret);
 }
 
 .cs-caret-hidden {
@@ -150,8 +156,6 @@ main {
 
 .cs-caret.cs-caret-error {
     background: var(--error);
-    box-shadow: 0 0 18px color-mix(in srgb, var(--error) 45%, transparent);
-    animation: cs-caret-error 0.35s ease-out;
 }
 
 @keyframes cs-caret-blink {
@@ -171,20 +175,6 @@ main {
     }
 }
 
-@keyframes cs-caret-error {
-    0% {
-        box-shadow: 0 0 0 color-mix(in srgb, var(--error) 0%, transparent);
-    }
-
-    45% {
-        box-shadow: 0 0 24px color-mix(in srgb, var(--error) 60%, transparent);
-    }
-
-    100% {
-        box-shadow: 0 0 0 color-mix(in srgb, var(--error) 0%, transparent);
-    }
-}
-
 /* Honor the OS "reduce motion" setting. The Framer animations already respect it
    via lib/motion.ts; these raw CSS animations are the one gap. */
 @media (prefers-reduced-motion: reduce) {
@@ -195,10 +185,6 @@ main {
         transition: none;
     }
 
-    .cs-caret.cs-caret-error {
-        animation: none;
-    }
-
     .app-header,
     .hero-panel {
         transition: none;
@@ -207,10 +193,8 @@ main {
 
 .cs-complete {
     color: var(--text) !important;
-    background: linear-gradient(180deg, var(--surface-hover), transparent) !important;
-    border-radius: 1px;
+    background: transparent !important;
     opacity: 1 !important;
-    transition: background 0.2s ease, color 0.2s ease;
 }
 
 .cs-focus-active .cs-hero {
