@@ -398,8 +398,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         setPhase("finished");
     }, [buildMetrics]);
 
-    // Auto-advance indentation logic
-    const autoAdvanceIndentationIfAllowed = useCallback((index: number): { advanced: number; nextIndex: number } => {
+    // Leading spaces on a line. `force` is set after Enter so a for/if body is
+    // already indented and the user does not have to press Tab.
+    const autoAdvanceIndentationIfAllowed = useCallback((index: number, force = false): { advanced: number; nextIndex: number } => {
         const content = snippetRef.current.content;
         if (!content || content.length === 0) {
             return { advanced: 0, nextIndex: index };
@@ -420,7 +421,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         }
         const nextChar = content[target];
         const isBlankLine = nextChar === "\n" || nextChar === "\r" || typeof nextChar === "undefined";
-        if (preferences.requireTabForIndent && !isBlankLine) {
+        if (!force && preferences.requireTabForIndent && !isBlankLine) {
             return { advanced: 0, nextIndex: index };
         }
 
@@ -755,7 +756,21 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             recordMistake(currentIndex, expected, got);
         }
 
-        if (atFrontier) maybeFinish(newCursor, timestamp);
+        // After a newline, take the indent the block expects. The caret lands on
+        // the first character of the body, the same way an editor indents a
+        // for-loop or an if statement.
+        let landed = newCursor;
+        if (atFrontier && ok && expected === "\n") {
+            const indent = autoAdvanceIndentationIfAllowed(newCursor, true);
+            if (indent.advanced > 0) {
+                placeCaret(indent.nextIndex, true);
+                countersRef.current.totalTypedChars += indent.advanced;
+                for (let index = newCursor; index < indent.nextIndex; index += 1) clearWrong(index);
+                landed = indent.nextIndex;
+            }
+        }
+
+        if (atFrontier) maybeFinish(landed, timestamp);
     }, [autoAdvanceIndentationIfAllowed, clearWrong, finishRun, flagCaretError, markWrong, onFinish, preferences.vimMode]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {

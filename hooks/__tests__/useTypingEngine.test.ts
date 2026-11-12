@@ -352,6 +352,32 @@ describe("useTypingEngine", () => {
     // Enter treated as newline
     // -------------------------------------------------------------------------
 
+    it("indents the body of an if or for when the line is entered", () => {
+        const block = makeSnippet("if (ok) {\n    return;\n}");
+        const { result } = renderHook(() => useTypingEngine({ snippet: block }));
+        const indentAt = block.content.indexOf("return");
+
+        act(() => {
+            for (const key of "if (ok) {") result.current.handleKeyDown(fireKey(key));
+            result.current.handleKeyDown(fireKey("Enter"));
+        });
+
+        expect(result.current.cursorIndex).toBe(indentAt);
+        expect(result.current.progressIndex).toBe(indentAt);
+        expect(result.current.wrongChars.size).toBe(0);
+        expect(result.current.totalKeystrokes).toBe("if (ok) {".length + 1);
+
+        const loop = makeSnippet("for item in items:\n    print(item)\n");
+        const loopHook = renderHook(() => useTypingEngine({ snippet: loop }));
+        act(() => {
+            for (const key of "for item in items:") loopHook.result.current.handleKeyDown(fireKey(key));
+            loopHook.result.current.handleKeyDown(fireKey("Enter"));
+        });
+
+        expect(loopHook.result.current.cursorIndex).toBe(loop.content.indexOf("print"));
+        expect(loopHook.result.current.wrongChars.size).toBe(0);
+    });
+
     it("treats Enter key as a newline character", () => {
         const snippet = makeSnippet("a\nb");
         const { result } = renderHook(() => useTypingEngine({ snippet }));
