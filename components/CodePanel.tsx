@@ -27,8 +27,8 @@ import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
 import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution";
 
-import { estimateEditorHeight, getCompletedRanges, getPreviewIndex, hexToRgb, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
-import { minAlphaForContrast } from "@/lib/contrast";
+import { estimateEditorHeight, getCompletedRanges, getPreviewIndex, hexToRgb, toMonacoColor } from "@/lib/code-panel";
+import { ghostTextColor, minAlphaForContrast } from "@/lib/contrast";
 import {
     CARET_BLINK_TIMEOUT_MS,
     LINE_HEIGHT_MULTIPLIER,
@@ -227,11 +227,13 @@ function CodePanel({
         const luminance = 0.299 * bgRgb[0] + 0.587 * bgRgb[1] + 0.114 * bgRgb[2];
         const isLight = luminance > 128;
 
-        // Fade untyped (read-ahead) text to a muted state, but derive the alpha
-        // per-theme so the composite over the theme bg clears the WCAG 3:1 floor.
-        // A flat 0.25 left it near-invisible on low-contrast themes.
+        // Dim the unread template, but keep it legible. The alpha is the lowest
+        // that still clears WCAG 3:1 for this theme; a flat 0.25 disappeared on
+        // low-contrast palettes. ghostTextColor bakes that mix into a solid hex
+        // because Monaco drops alpha on token colors, which left the template
+        // at full strength and identical to text the user had already typed.
         const untypedAlpha = minAlphaForContrast(theme.text, theme.bg, 3.0);
-        const fade = (color: string) => withMonacoAlpha(color, untypedAlpha);
+        const fade = (color: string) => ghostTextColor(color, theme.bg, untypedAlpha);
 
         const themeName = `codesprint-${preferences.theme}`;
         try {

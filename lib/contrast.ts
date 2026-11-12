@@ -84,6 +84,22 @@ export function minAlphaForContrast(fgHex: string, bgHex: string, targetRatio: n
 }
 
 /**
+ * Solid hex for unread template text.
+ *
+ * Monaco's token `foreground` keeps only RRGGBB and drops an alpha byte, so an
+ * 8-digit color paints the template at full strength. Typed characters then
+ * cannot be told apart from the code still waiting to be typed. Compositing
+ * the mix over the theme background keeps the dimming in a color Monaco will
+ * actually draw. Non-hex inputs are returned unchanged.
+ */
+export function ghostTextColor(fgHex: string, bgHex: string, alpha: number): string {
+    if (!fgHex.startsWith("#") || !bgHex.startsWith("#")) {
+        return fgHex;
+    }
+    return compositeOver(fgHex, bgHex, alpha);
+}
+
+/**
  * The most muted opaque form of `fgHex` over `bgHex` that still clears
  * `targetRatio`. Starts at the read-ahead muting alpha and keeps stepping toward
  * the full foreground when that cap alone cannot reach the target (the cap only

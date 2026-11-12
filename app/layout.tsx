@@ -77,8 +77,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     const themeInitScript = createThemeInitScript();
+    // The beforeInteractive script paints the stored theme onto <html> before
+    // hydration. The server has no localStorage, so those attributes will not
+    // match this render. The warning is limited to this element.
     return (
-        <html lang="en" className={jetbrainsMono.variable}>
+        <html lang="en" className={jetbrainsMono.variable} suppressHydrationWarning>
             <body>
                 <Script id="codesprint-theme-init" strategy="beforeInteractive">
                     {themeInitScript}

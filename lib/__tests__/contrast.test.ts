@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     compositeOver,
     contrastRatio,
+    ghostTextColor,
     minAlphaForContrast,
     relativeLuminance,
 } from "../contrast";
@@ -87,6 +88,34 @@ describe("minAlphaForContrast", () => {
         // A meaningfully smaller alpha should drop below the target.
         if (alpha > 0.02) {
             expect(contrastRatio(compositeOver(fg, bg, alpha - 0.02), bg)).toBeLessThan(3.0);
+        }
+    });
+});
+
+describe("ghostTextColor", () => {
+    it("returns an opaque hex dimmer than the source that still clears the floor", () => {
+        const fg = "#cdd6f4";
+        const bg = "#1e1e2e";
+        const alpha = minAlphaForContrast(fg, bg, 3.0);
+        const ghost = ghostTextColor(fg, bg, alpha);
+
+        expect(ghost).toMatch(/^#[0-9a-f]{6}$/);
+        expect(ghost).not.toBe(fg);
+        expect(contrastRatio(ghost, bg)).toBeGreaterThanOrEqual(3.0);
+        expect(contrastRatio(ghost, bg)).toBeLessThan(contrastRatio(fg, bg));
+    });
+
+    it("leaves non-hex colors untouched", () => {
+        expect(ghostTextColor("rgba(205, 214, 244, 0.4)", "#1e1e2e", 0.4)).toBe("rgba(205, 214, 244, 0.4)");
+    });
+
+    it("dims body text on every theme without dropping under the read-ahead floor", () => {
+        for (const [name, theme] of Object.entries(THEME_PRESETS)) {
+            const alpha = minAlphaForContrast(theme.text, theme.bg, 3.0);
+            const ghost = ghostTextColor(theme.text, theme.bg, alpha);
+            expect(ghost, name).toMatch(/^#[0-9a-f]{6}$/);
+            expect(contrastRatio(ghost, theme.bg), name).toBeGreaterThanOrEqual(3.0);
+            expect(contrastRatio(ghost, theme.bg), name).toBeLessThan(contrastRatio(theme.text, theme.bg));
         }
     });
 });
