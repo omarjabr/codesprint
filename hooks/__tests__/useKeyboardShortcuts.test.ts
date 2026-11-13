@@ -15,7 +15,6 @@ function makeProps(overrides: Partial<UseKeyboardShortcutsProps> = {}): UseKeybo
         onStartEngine: vi.fn(),
         enableEditorFocus: vi.fn(),
         focusEditor: vi.fn(),
-        setVimMode: vi.fn(),
         setShowLiveStatsDuringRun: vi.fn(),
         showLiveStatsDuringRun: false,
         clearAutoAdvance: vi.fn(),
@@ -215,6 +214,160 @@ describe("useKeyboardShortcuts", () => {
 
             press("n");
             expect(finishedProps.onNextProblem).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe("Vim off shortcuts", () => {
+        it("resets and starts on r when the run is finished", () => {
+            const props = makeProps({ phase: "finished" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            press("r");
+
+            expect(props.onReset).toHaveBeenCalledTimes(1);
+            expect(props.onStartEngine).toHaveBeenCalledTimes(1);
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+        });
+
+        it("advances on q when the run is finished", () => {
+            const props = makeProps({ phase: "finished" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            press("q");
+
+            expect(props.onNextProblem).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe("Vim typing session", () => {
+        it("does not score a motion", () => {
+            const props = makeProps({ vimMode: true, phase: "idle" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            press("j");
+
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+            expect(props.onStartEngine).not.toHaveBeenCalled();
+        });
+
+        it("parks the typing caret where Vim is before Insert", () => {
+            const seekVimCaret = vi.fn();
+            const props = makeProps({
+                vimMode: true,
+                phase: "idle",
+                readVimCaret: () => 12,
+                seekVimCaret,
+            });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            press("a");
+
+            expect(seekVimCaret).toHaveBeenCalledWith(12, "a");
+            expect(props.onStartEngine).toHaveBeenCalledTimes(1);
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+        });
+
+        it("starts the run on i without typing the letter", () => {
+            const props = makeProps({ vimMode: true, phase: "idle" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            const event = press("i");
+
+            expect(props.onStartEngine).toHaveBeenCalledTimes(1);
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+            expect(event.defaultPrevented).toBe(true);
+        });
+
+        it("scores insert-mode characters and leaves the run alone on Escape", () => {
+            const props = makeProps({ vimMode: true, phase: "running" });
+            const { result } = renderHook(() => useKeyboardShortcuts(props));
+
+            press("i");
+            expect(result.current.vimSessionMode).toBe("insert");
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+
+            press("f");
+            expect(props.engineHandleKeyDown).toHaveBeenCalledTimes(1);
+
+            press("Escape");
+            expect(props.onReset).not.toHaveBeenCalled();
+            expect(result.current.vimSessionMode).toBe("normal");
+        });
+
+        it("resets a running session when Escape is pressed in Normal", () => {
+            const props = makeProps({ vimMode: true, phase: "running" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            press("Escape");
+
+            expect(props.onReset).toHaveBeenCalledTimes(1);
+            expect(props.clearAutoAdvance).toHaveBeenCalledTimes(1);
+        });
+
+        it("does not reset on r in Normal", () => {
+            const props = makeProps({ vimMode: true, phase: "idle" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            press("r");
+
+            expect(props.onReset).not.toHaveBeenCalled();
+            expect(props.onStartEngine).not.toHaveBeenCalled();
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+        });
+
+        it("ignores keys aimed at the Vim status input", () => {
+            const props = makeProps({ vimMode: true, phase: "running" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            const bar = document.createElement("div");
+            bar.className = "vim-status-bar";
+            const input = document.createElement("input");
+            bar.appendChild(input);
+            document.body.appendChild(bar);
+
+            const event = new KeyboardEvent("keydown", { key: "d", bubbles: true, cancelable: true });
+            act(() => {
+                input.dispatchEvent(event);
+            });
+
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+            expect(props.onVimHint).toBeUndefined();
+            expect(event.defaultPrevented).toBe(false);
+
+            bar.remove();
+        });
+
+        it("reports a hint for an edit command and does not score it", () => {
+            const onVimHint = vi.fn();
+            const props = makeProps({ vimMode: true, phase: "idle", onVimHint });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            const event = press("x");
+
+            expect(onVimHint).toHaveBeenCalledWith("Edits belong to Vim drills");
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+            expect(event.defaultPrevented).toBe(true);
+        });
+
+        it("does not treat n as next-problem while Vim Normal owns the editor", () => {
+            const props = makeProps({ vimMode: true, phase: "finished" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            press("n");
+
+            expect(props.onNextProblem).not.toHaveBeenCalled();
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+        });
+
+        it("lets a Vim drill keep the key", () => {
+            const props = makeProps({ vimMode: true, phase: "idle", practiceMode: "vim-drill" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            const event = press("d");
+
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+            expect(props.onStartEngine).not.toHaveBeenCalled();
+            expect(event.defaultPrevented).toBe(false);
         });
     });
 });

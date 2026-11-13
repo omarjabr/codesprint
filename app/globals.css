@@ -178,6 +178,12 @@ main {
     background: var(--error);
 }
 
+/* Vim Normal: a block on the glyph, so motions are visible. Insert stays a bar. */
+.cs-caret.cs-caret-vim {
+    width: 0.65em;
+    border-radius: 0;
+}
+
 /* Symmetric fade, not a held-on blink. The old keyframes stayed solid and then
    dropped out for ~100ms, which read as a flicker. */
 @keyframes cs-caret-blink {

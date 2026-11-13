@@ -5,6 +5,7 @@ import { computeMetrics, createPatternScoreCalculator, type Metrics } from "@/li
 import type { Snippet } from "@/lib/snippets";
 import { tokenize } from "@/lib/tokenizer";
 import { usePreferences } from "@/lib/preferences";
+import { vimInsertIndex, vimRunComplete } from "@/lib/vim-keys";
 
 export type Phase = "idle" | "countdown" | "running" | "finished";
 
@@ -79,6 +80,13 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     // only when the set actually gains or loses a member.
     const [publishedWrongChars, setPublishedWrongChars] = useState<Set<number>>(new Set());
     const wrongCharsDirtyRef = useRef(false);
+    // Characters typed correctly in Vim, in any order. The sequential frontier
+    // stays put so earlier gaps are not marked done.
+    const settledRef = useRef(new Set<number>());
+    const settledDirtyRef = useRef(false);
+    const [settledChars, setSettledChars] = useState<number[]>([]);
+    const vimFreeRef = useRef(preferences.vimMode);
+    vimFreeRef.current = preferences.vimMode;
     // Closer indices an editor would have inserted. Keyed by the opener index
     // so backspacing that opener removes the pair.
     const autoClosedRef = useRef(new Map<number, readonly number[]>());
@@ -110,6 +118,12 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             for (const index of closers) next.add(index);
         }
         setAutoClosedChars(next);
+    }, []);
+
+    const publishSettled = useCallback(() => {
+        if (!settledDirtyRef.current) return;
+        settledDirtyRef.current = false;
+        setSettledChars([...settledRef.current].sort((a, b) => a - b));
     }, []);
 
     const [startTime, setStartTime] = useState<number | null>(null);
@@ -150,6 +164,13 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     useEffect(() => {
         snippetRef.current = snippet;
     }, [snippet]);
+
+    useEffect(() => {
+        if (settledRef.current.size === 0) return;
+        settledRef.current = new Set();
+        settledDirtyRef.current = false;
+        setSettledChars([]);
+    }, [snippet.content]);
 
     // History tracking
     const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -241,6 +262,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         finalSnapshotRef.current = null;
         wrongCharsRef.current = new Set();
         wrongCharsDirtyRef.current = false;
+        settledRef.current = new Set();
+        settledDirtyRef.current = false;
         autoClosedRef.current = new Map();
         autoClosedDirtyRef.current = false;
         clearCaretErrorTimeout();
@@ -249,6 +272,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         setCursorIndex(0);
         setProgressIndex(0);
         setPublishedWrongChars(new Set());
+        setSettledChars([]);
         setAutoClosedChars(new Set());
         setStartTime(null);
         setNow(Date.now());
@@ -319,7 +343,10 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         // Calculate getPerfectWordChars
         let perfectChars = 0;
         let wordStart = 0;
-        for (let i = 0; i <= idx; i++) {
+        if (vimFreeRef.current) {
+            perfectChars = settledRef.current.size;
+        }
+        for (let i = 0; i <= idx && !vimFreeRef.current; i++) {
             const char = snippetContent[i];
             const isWordEnd = i === snippetContent.length || char === " " || char === "\n" || char === "\t";
             if (isWordEnd) {
@@ -383,7 +410,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             wrongChars,
             errorLog: [...errorLogRef.current],
             history: [...historyRef.current],
-            cursorIndex: progressIndexRef.current,
+            cursorIndex: vimFreeRef.current ? cursorIndexRef.current : progressIndexRef.current,
             totalKeystrokes: countersRef.current.totalKeystrokes,
             correctKeystrokes: countersRef.current.correctKeystrokes,
         });
@@ -432,13 +459,13 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
     const processKeyDown = useCallback((e: KeyboardEvent) => {
         const phaseNow = phaseRef.current;
-        const allowVimPropagation = preferences.vimMode;
 
+        // The shortcut hook decides whether Vim or the engine owns a key.
+        // A key that reaches this function is a typing key and must not also
+        // move Monaco.
         const swallowEvent = () => {
-            if (!allowVimPropagation) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
+            e.preventDefault();
+            e.stopPropagation();
         };
 
         const placeCaret = (index: number, extendProgress: boolean) => {
@@ -448,6 +475,23 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (!extendProgress) return;
             progressIndexRef.current = index;
             setProgressIndex(index);
+        };
+
+        // Vim types wherever the caret is. Those indexes are recorded on their
+        // own so a gap earlier in the snippet stays untyped.
+        const settleRange = (from: number, to: number) => {
+            if (!vimFreeRef.current) return;
+            for (let index = from; index < to; index += 1) {
+                if (settledRef.current.has(index)) continue;
+                settledRef.current.add(index);
+                settledDirtyRef.current = true;
+            }
+        };
+
+        const finishIfRoamed = (at: number) => {
+            if (!vimFreeRef.current) return;
+            if (!vimRunComplete(snippetRef.current.content, settledRef.current)) return;
+            finishRun(at);
         };
 
         const readAutoClosed = (): number[] => {
@@ -518,13 +562,14 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             const content = snippetRef.current.content;
             const before = cursorIndexRef.current;
             const progress = progressIndexRef.current;
+            const ceiling = vimFreeRef.current ? content.length : progress;
             const closed = readAutoClosed();
             const direction = e.key === "ArrowRight" ? "right" : "left";
             const moved = wordJump
-                ? jumpWord(content, before, progress, closed, direction)
+                ? jumpWord(content, before, ceiling, closed, direction)
                 : lineJump
-                    ? jumpCaret(content, before, progress, closed, direction)
-                    : moveCaret(content, before, progress, closed, e.key, preferredColumnRef.current);
+                    ? jumpCaret(content, before, ceiling, closed, direction)
+                    : moveCaret(content, before, ceiling, closed, e.key, preferredColumnRef.current);
             const steppedOverCloser = !lineJump
                 && !wordJump
                 && e.key === "ArrowRight"
@@ -541,7 +586,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 cursorIndexRef.current = moved.cursor;
                 setCursorIndex(moved.cursor);
             }
-            if (nextProgress !== progress) {
+            if (!vimFreeRef.current && nextProgress !== progress) {
                 progressIndexRef.current = nextProgress;
                 setProgressIndex(nextProgress);
                 maybeFinish(nextProgress, Date.now());
@@ -575,8 +620,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             }
 
             // Tab only types at the frontier. In the middle of written text it would
-            // skip characters the user has already entered.
-            if (cursorIndexRef.current !== progressIndexRef.current) return;
+            // skip characters the user has already entered. Vim may tab at the caret.
+            if (!vimFreeRef.current && cursorIndexRef.current !== progressIndexRef.current) return;
 
             // Tab counts as a keystroke? Usually yes.
             countKeystroke();
@@ -590,9 +635,11 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (auto.advanced > 0) {
                 const advancedIndex = auto.nextIndex;
 
-                placeCaret(advancedIndex, true);
+                placeCaret(advancedIndex, !vimFreeRef.current);
                 countersRef.current.totalTypedChars += auto.advanced;
                 for (let i = startIndex; i < advancedIndex; i++) clearWrong(i);
+                settleRange(startIndex, advancedIndex);
+                finishIfRoamed(Date.now());
 
                 return;
             }
@@ -608,21 +655,25 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             }
 
             if (advanced > 0) {
-                placeCaret(startIndex + advanced, true);
+                placeCaret(startIndex + advanced, !vimFreeRef.current);
                 countersRef.current.totalTypedChars += advanced;
                 // Manual tab is a correct action
                 countCorrect();
                 for (let i = 0; i < advanced; i++) clearWrong(startIndex + i);
+                settleRange(startIndex, startIndex + advanced);
+                finishIfRoamed(Date.now());
                 return;
             }
 
             // 3. Manual Tab (literal tab character)
             const expected = content[startIndex];
             if (expected === "\t") {
-                placeCaret(startIndex + 1, true);
+                placeCaret(startIndex + 1, !vimFreeRef.current);
                 countersRef.current.totalTypedChars += 1;
                 countCorrect();
                 clearWrong(startIndex);
+                settleRange(startIndex, startIndex + 1);
+                finishIfRoamed(Date.now());
             }
             return;
         }
@@ -640,6 +691,23 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         // During countdown, ignore all typing keys (let countdown finish automatically)
         if (phaseNow === "countdown") {
             swallowEvent();
+            return;
+        }
+
+        // Vim backspace steps one character and forgets it, wherever it sits.
+        if (e.key === "Backspace" && vimFreeRef.current) {
+            swallowEvent();
+            if (phaseNow === "finished") {
+                phaseRef.current = "running";
+                setPhase("running");
+            }
+            const currentCursor = cursorIndexRef.current;
+            if (currentCursor === 0) return;
+            const targetIndex = currentCursor - 1;
+            placeCaret(targetIndex, false);
+            clearWrong(targetIndex);
+            if (settledRef.current.delete(targetIndex)) settledDirtyRef.current = true;
+            if (autoClosedRef.current.delete(targetIndex)) autoClosedDirtyRef.current = true;
             return;
         }
 
@@ -680,7 +748,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         // A closer sitting ahead of the typed run is already written. Stepping
         // on it with the matching character moves past it; any other key,
         // including space, is ignored so it is not marked wrong.
-        if (cursorIndexRef.current > progressIndexRef.current) {
+        if (!vimFreeRef.current && cursorIndexRef.current > progressIndexRef.current) {
             swallowEvent();
             const index = cursorIndexRef.current;
             const expected = snippetRef.current.content[index];
@@ -718,17 +786,20 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             return;
         }
 
+        const free = vimFreeRef.current;
         const atFrontier = cursorIndexRef.current === progressIndexRef.current;
         let currentIndex = cursorIndexRef.current;
 
-        // Indent is skipped only when typing forward at the end of what was written.
-        if (atFrontier) {
+        // Indent is skipped when typing forward. Vim may start that on any line.
+        if (atFrontier || free) {
             const advanced = autoAdvanceIndentationIfAllowed(currentIndex);
             if (advanced.advanced > 0) {
+                const from = currentIndex;
                 currentIndex = advanced.nextIndex;
-                placeCaret(currentIndex, true);
+                placeCaret(currentIndex, !free);
                 countersRef.current.totalTypedChars += advanced.advanced;
-                for (let i = currentIndex - advanced.advanced; i < currentIndex; i++) clearWrong(i);
+                for (let i = from; i < currentIndex; i++) clearWrong(i);
+                settleRange(from, currentIndex);
             }
         }
 
@@ -744,14 +815,16 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
         const newCursor = currentIndex + 1;
         // Retyping earlier text moves the caret without extending how far the run has reached.
-        placeCaret(newCursor, atFrontier);
-        if (atFrontier) countersRef.current.totalTypedChars += 1;
+        placeCaret(newCursor, atFrontier && !free);
+        if (atFrontier || free) countersRef.current.totalTypedChars += 1;
 
         if (ok) {
             countCorrect();
             clearWrong(currentIndex);
+            settleRange(currentIndex, currentIndex + 1);
             rememberPair(currentIndex, true);
         } else {
+            if (settledRef.current.delete(currentIndex)) settledDirtyRef.current = true;
             rememberPair(currentIndex, false);
             recordMistake(currentIndex, expected, got);
         }
@@ -760,25 +833,36 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         // the first character of the body, the same way an editor indents a
         // for-loop or an if statement.
         let landed = newCursor;
-        if (atFrontier && ok && expected === "\n") {
+        if ((atFrontier || free) && ok && expected === "\n") {
             const indent = autoAdvanceIndentationIfAllowed(newCursor, true);
             if (indent.advanced > 0) {
-                placeCaret(indent.nextIndex, true);
+                placeCaret(indent.nextIndex, !free);
                 countersRef.current.totalTypedChars += indent.advanced;
                 for (let index = newCursor; index < indent.nextIndex; index += 1) clearWrong(index);
+                settleRange(newCursor, indent.nextIndex);
                 landed = indent.nextIndex;
             }
         }
 
-        if (atFrontier) maybeFinish(landed, timestamp);
-    }, [autoAdvanceIndentationIfAllowed, clearWrong, finishRun, flagCaretError, markWrong, onFinish, preferences.vimMode]);
+        if (atFrontier && !free) maybeFinish(landed, timestamp);
+        if (free && ok) finishIfRoamed(timestamp);
+    }, [autoAdvanceIndentationIfAllowed, clearWrong, finishRun, flagCaretError, markWrong, onFinish]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         processKeyDown(e);
         // One clone per real change to the wrong-char set, instead of one per tick.
         publishWrongChars();
         publishAutoClosed();
-    }, [processKeyDown, publishAutoClosed, publishWrongChars]);
+        publishSettled();
+    }, [processKeyDown, publishAutoClosed, publishSettled, publishWrongChars]);
+
+    const seekVimCaret = useCallback((offset: number, key: string) => {
+        const content = snippetRef.current.content;
+        const next = vimInsertIndex(content, offset, key);
+        cursorIndexRef.current = next;
+        setCursorIndex(next);
+        preferredColumnRef.current = columnAt(content, next);
+    }, []);
 
     // Interval-based metrics publishing during running phase. ~200ms so the
     // live WPM climbs continuously instead of lurching every 1.5s; computeMetrics
@@ -831,6 +915,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         /** End of the contiguous text the user has typed. The caret may sit behind this. */
         progressIndex,
         wrongChars: publishedWrongChars,
+        /** Indexes typed correctly while Vim lets the caret roam. */
+        settledChars,
         /** Closers inserted with an opener. Highlighted before the caret reaches them. */
         autoClosedChars,
         metrics: publishedMetrics,
@@ -845,6 +931,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         reset,
         start,
         handleKeyDown,
+        seekVimCaret,
         setPhase, // Exposed for edge cases like "Escape" handled outside or "R"
     };
 }

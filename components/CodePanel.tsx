@@ -27,7 +27,9 @@ import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
 import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution";
 
-import { estimateEditorHeight, getCompletedRanges, getPreviewIndex, hexToRgb, toMonacoColor } from "@/lib/code-panel";
+import { estimateEditorHeight, getCompletedRanges, getPreviewIndex, hexToRgb, rangesFromIndices, toMonacoColor } from "@/lib/code-panel";
+import type { VimDrillSnapshot } from "@/lib/vim-drills";
+import type { VimSessionMode } from "@/hooks/useKeyboardShortcuts";
 import {
     CARET_BLINK_TIMEOUT_MS,
     LINE_HEIGHT_MULTIPLIER,
@@ -51,6 +53,18 @@ type CodePanelProps = {
     fontSize: number;
     surfaceStyle: SurfaceStyle;
     syntaxHighlighting: "full" | "partial" | "none";
+    /** Typing stays read-only. A Vim drill lets Monaco apply insert and operators. */
+    interaction?: "type" | "vim-drill";
+    /** Our Insert label. Monaco itself stays in Normal on the read-only snippet. */
+    vimSessionMode?: VimSessionMode;
+    /** Short note when an edit command is blocked. */
+    vimHint?: string | null;
+    /** Characters typed in any order. When set, completed highlighting follows these indexes. */
+    freeTyped?: readonly number[];
+    /** Reports the Vim caret as a snippet offset so Insert can type there. */
+    onVimCaret?: (offset: number) => void;
+    /** Drill sessions report the buffer and cursor so the goal can be checked. */
+    onDrillState?: (state: VimDrillSnapshot) => void;
 };
 
 const LINE_BREAK_REGEX = /\r\n|\r|\n/;
@@ -79,8 +93,6 @@ function readCaretX(editor: EditorInstance, fallbackLeft: number): number {
 const MONACO_FONT_FAMILY = "var(--font-mono), ui-monospace, Menlo, Consolas, monospace";
 
 const EDITOR_OPTIONS: Monaco.editor.IStandaloneEditorConstructionOptions = {
-    readOnly: true,
-    domReadOnly: true,
     automaticLayout: true,
     fontFamily: MONACO_FONT_FAMILY,
     scrollbar: { vertical: "hidden", horizontal: "hidden" },
@@ -114,8 +126,24 @@ function CodePanel({
     fontSize,
     surfaceStyle,
     syntaxHighlighting,
+    interaction = "type",
+    vimSessionMode = "normal",
+    vimHint = null,
+    freeTyped,
+    onVimCaret,
+    onDrillState,
 }: CodePanelProps) {
     const { preferences } = usePreferences();
+    const vimActive = interaction === "vim-drill" || preferences.vimMode;
+    const editable = interaction === "vim-drill";
+    const onDrillStateRef = useRef(onDrillState);
+    onDrillStateRef.current = onDrillState;
+    const onVimCaretRef = useRef(onVimCaret);
+    onVimCaretRef.current = onVimCaret;
+    const vimSessionModeRef = useRef(vimSessionMode);
+    vimSessionModeRef.current = vimSessionMode;
+    const vimCaretBlockRef = useRef(false);
+    vimCaretBlockRef.current = vimActive && !editable && vimSessionMode === "normal";
     const prefersReducedMotion = usePrefersReducedMotion();
     const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
     const monacoRef = useRef<MonacoModule | null>(null);
@@ -134,6 +162,14 @@ function CodePanel({
 
     const sortedWrongChars = useMemo(() => [...wrongChars].sort((a, b) => a - b), [wrongChars]);
     const sortedAutoClosed = useMemo(() => [...autoClosedChars], [autoClosedChars]);
+    const editorOptions = useMemo(
+        () => ({
+            ...EDITOR_OPTIONS,
+            readOnly: !editable,
+            domReadOnly: !editable,
+        }),
+        [editable],
+    );
     const derivedLineHeight = Math.round(fontSize * LINE_HEIGHT_MULTIPLIER);
     const caretHeight = computeCaretHeight(fontSize);
     // Full content height, uncapped: the editor never scrolls internally, so the
@@ -226,6 +262,7 @@ function CodePanel({
             return;
         }
         caretNode.classList.remove("cs-caret-hidden");
+        caretNode.classList.toggle("cs-caret-vim", vimCaretBlockRef.current);
         const lineHeight = Math.round(coords.height);
         // Center the shorter caret in the line box so it sits on the glyphs
         // the way Monkeytype's 1.2em caret does, instead of filling the leading.
@@ -336,7 +373,7 @@ function CodePanel({
         const editor = editorRef.current;
         if (!editor) return;
 
-        if (preferences.vimMode) {
+        if (vimActive) {
             if (!vimModeRef.current) {
                 const statusNode = document.createElement("div");
                 statusNode.className = "vim-status-bar";
@@ -378,7 +415,69 @@ function CodePanel({
                 statusNodeRef.current = null;
             }
         }
-    }, [preferences.vimMode, editorReadyToken]);
+    }, [vimActive, editorReadyToken]);
+
+    // Monaco will not enter Insert on a read-only model, so the typing session
+    // writes the mode label itself. Drills leave the label to Monaco.
+    useEffect(() => {
+        if (!vimActive || editable) return;
+        const node = statusNodeRef.current;
+        if (!node) return;
+        if (node.querySelector("input")) return;
+        const modeNode = node.firstElementChild;
+        if (!(modeNode instanceof HTMLElement)) return;
+        modeNode.textContent = vimSessionMode === "insert" ? "--INSERT--" : "--NORMAL--";
+    }, [vimActive, editable, vimSessionMode, editorReadyToken]);
+
+    useEffect(() => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        editor.updateOptions({ readOnly: !editable, domReadOnly: !editable });
+    }, [editable, editorReadyToken]);
+
+    // Motions move Monaco's cursor, which the app hides. Paint the practice
+    // caret there so Normal mode shows where the next Insert will type.
+    useEffect(() => {
+        if (!vimActive || editable) return;
+        const editor = editorRef.current;
+        if (!editor) return;
+        const report = () => {
+            const position = editor.getPosition();
+            const model = editor.getModel();
+            if (!position || !model) return;
+            onVimCaretRef.current?.(model.getOffsetAt(position));
+            if (vimSessionModeRef.current !== "normal") return;
+            caretPositionRef.current = position;
+            renderCaretNow();
+            triggerCaretActivity();
+        };
+        report();
+        const sub = editor.onDidChangeCursorPosition(report);
+        return () => sub.dispose();
+    }, [vimActive, editable, editorReadyToken, renderCaretNow, triggerCaretActivity]);
+
+    useEffect(() => {
+        if (!editable) return;
+        const editor = editorRef.current;
+        if (!editor) return;
+        const report = () => {
+            const model = editor.getModel();
+            const position = editor.getPosition();
+            if (!model || !position) return;
+            onDrillStateRef.current?.({
+                text: model.getValue(),
+                line: position.lineNumber,
+                column: position.column,
+            });
+        };
+        report();
+        const contentSub = editor.onDidChangeModelContent(report);
+        const cursorSub = editor.onDidChangeCursorPosition(report);
+        return () => {
+            contentSub.dispose();
+            cursorSub.dispose();
+        };
+    }, [editable, editorReadyToken]);
 
     const handleMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
@@ -386,8 +485,8 @@ function CodePanel({
         // Apply the real theme before the first paint to avoid a vs-dark -> theme flash.
         applyTheme(monaco);
         editor.updateOptions({
-            readOnly: true,
-            domReadOnly: true,
+            readOnly: !editable,
+            domReadOnly: !editable,
             fontFamily: MONACO_FONT_FAMILY,
             fontSize,
             lineHeight: derivedLineHeight,
@@ -488,18 +587,37 @@ function CodePanel({
         ensureCaretNode();
         const editor = editorRef.current;
         const monaco = monacoRef.current;
+        if (editable) {
+            caretNodeRef.current?.classList.add("cs-caret-hidden");
+            return;
+        }
         if (!editor || !monaco) return;
         const model = editor.getModel();
         if (!model) return;
 
+        const followVimCursor = vimActive && vimSessionMode === "normal";
         const caretIndex = Math.max(0, Math.min(cursorChar, content.length));
-        const caretPosition = model.getPositionAt(caretIndex);
+        const caretPosition = followVimCursor
+            ? editor.getPosition()
+            : model.getPositionAt(caretIndex);
+        if (!caretPosition) return;
         caretPositionRef.current = caretPosition;
         renderCaretNow();
         triggerCaretActivity();
-        if (!caretPosition) return;
 
-        const previewIndex = getPreviewIndex(content, caretIndex);
+        // Insert types at the engine caret, so Monaco's cursor has to follow it.
+        // Normal leaves Monaco where the motion put it and the caret reads that.
+        if (vimActive && vimSessionMode === "insert") {
+            const current = editor.getPosition();
+            const aligned = current !== null
+                && current.lineNumber === caretPosition.lineNumber
+                && current.column === caretPosition.column;
+            if (!aligned) editor.setPosition(caretPosition);
+        }
+
+        const caretOffset = model.getOffsetAt(caretPosition);
+        if (followVimCursor) onVimCaretRef.current?.(caretOffset);
+        const previewIndex = getPreviewIndex(content, followVimCursor ? caretOffset : caretIndex);
         const previewPosition = model.getPositionAt(previewIndex);
         const previewRange = new monaco.Range(
             caretPosition.lineNumber,
@@ -516,7 +634,7 @@ function CodePanel({
             previewRange,
             prefersReducedMotion ? monaco.editor.ScrollType.Immediate : monaco.editor.ScrollType.Smooth,
         );
-    }, [cursorChar, content, editorReadyToken, renderCaretNow, triggerCaretActivity, ensureCaretNode, prefersReducedMotion]);
+    }, [cursorChar, content, editorReadyToken, renderCaretNow, triggerCaretActivity, ensureCaretNode, prefersReducedMotion, editable, vimActive, vimSessionMode]);
 
     // Watch the panel's bottom edge instead of listening to scroll: the observer
     // only fires when the end of the snippet crosses the viewport boundary, so
@@ -547,12 +665,21 @@ function CodePanel({
         const editor = editorRef.current;
         const monaco = monacoRef.current;
         if (!editor || !monaco) return;
+        if (editable) {
+            if (decorationIdsRef.current.length) {
+                decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, []);
+            }
+            return;
+        }
         const model = editor.getModel();
         if (!model) return;
 
         const typedIndex = Math.max(0, Math.min(typedThrough, content.length));
+        const completedRanges = freeTyped
+            ? rangesFromIndices(freeTyped, wrongChars)
+            : getCompletedRanges(typedIndex, sortedWrongChars, sortedAutoClosed);
 
-        const completedDecorations: Monaco.editor.IModelDeltaDecoration[] = getCompletedRanges(typedIndex, sortedWrongChars, sortedAutoClosed)
+        const completedDecorations: Monaco.editor.IModelDeltaDecoration[] = completedRanges
             .map(([start, end]) => {
                 const startPos = model.getPositionAt(start);
                 const endPos = model.getPositionAt(end);
@@ -574,7 +701,7 @@ function CodePanel({
             ...completedDecorations,
             ...errorDecorations,
         ]);
-    }, [typedThrough, sortedAutoClosed, sortedWrongChars, content, editorReadyToken, ensureCaretNode]);
+    }, [typedThrough, sortedAutoClosed, sortedWrongChars, freeTyped, wrongChars, content, editorReadyToken, ensureCaretNode, editable]);
 
     useEffect(() => {
         const editorRefCapture = editorRef;
@@ -653,11 +780,30 @@ function CodePanel({
                 // theme is handled by useEffect, but we provide a safe default
                 theme="vs-dark"
                 height={estimatedHeight}
-                options={EDITOR_OPTIONS}
+                options={editorOptions}
                 onMount={handleMount}
             />
             {/* Zero-height marker on the panel's bottom edge; see the observer above. */}
             <Box ref={tailMarkerRef} position="absolute" left={0} right={0} bottom={0} h="1px" aria-hidden="true" pointerEvents="none" />
+            {vimHint ? (
+                <Box
+                    data-testid="vim-edit-hint"
+                    position="absolute"
+                    left={4}
+                    bottom={3}
+                    zIndex={11}
+                    px={2.5}
+                    py={1}
+                    borderRadius="var(--radius-sm)"
+                    border="1px solid var(--border)"
+                    bg="var(--surface)"
+                    color="var(--text)"
+                    fontFamily={MONACO_FONT_FAMILY}
+                    fontSize="xs"
+                >
+                    {vimHint}
+                </Box>
+            ) : null}
             {showLineCountdown ? (
                 // The chip's flow position is the panel's bottom edge (hence the
                 // flex-end overlay, which adds no layout of its own); sticky then

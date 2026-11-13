@@ -51,6 +51,9 @@ export interface SessionControlBarProps {
     suggestedDifficulty?: Difficulty;
     /** Callback when AI Drill button is clicked */
     onOpenAIDrill?: () => void;
+    /** Type is the snippet test. Vim is the editable drill session. */
+    practice: "type" | "vim";
+    onPracticeChange: (practice: "type" | "vim") => void;
 }
 
 const LANGUAGE_OPTIONS: Array<{ value: SupportedLanguage; label: string }> = [
@@ -138,6 +141,8 @@ export function SessionControlBar({
     dueCount,
     suggestedDifficulty,
     onOpenAIDrill,
+    practice,
+    onPracticeChange,
 }: SessionControlBarProps) {
     const controlsMotion = getControlsMotion(prefersReducedMotion);
 
@@ -156,6 +161,23 @@ export function SessionControlBar({
     return (
         <m.div className={barClass} {...controlsMotion}>
             <div className="session-control-row">
+                <div className="session-control-group" role="group" aria-label="Practice">
+                    <ControlOption
+                        label="Type"
+                        pressed={practice === "type"}
+                        disabled={disabled}
+                        helper="Type the snippet"
+                        onClick={() => onPracticeChange("type")}
+                    />
+                    <ControlOption
+                        label="Vim"
+                        pressed={practice === "vim"}
+                        disabled={disabled}
+                        helper="Practice Vim motions and operators"
+                        onClick={() => onPracticeChange("vim")}
+                    />
+                </div>
+
                 <div className="session-control-group" role="group" aria-label="Language">
                     {LANGUAGE_OPTIONS.map((option) => (
                         <ControlOption

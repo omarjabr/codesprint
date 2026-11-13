@@ -45,12 +45,14 @@ const switchSlotRecipe = defineSlotRecipe({
             solid: {
                 control: {
                     bg: "var(--surface-active)",
-                    borderWidth: "1px",
-                    borderStyle: "solid",
-                    borderColor: "var(--border)",
+                    // Inset ring, same as the slider. A real border is inside the
+                    // 40×20 track (border-box), so the 20px thumb starts 1px in
+                    // and its 0.8 scale lands 1px low, with 3px of air on the
+                    // off side and 1px on the on side.
+                    boxShadow: "inset 0 0 0 1px var(--border)",
                     _checked: {
                         bg: "var(--accent)",
-                        borderColor: "var(--accent)",
+                        boxShadow: "inset 0 0 0 1px var(--accent)",
                     },
                 },
                 thumb: {

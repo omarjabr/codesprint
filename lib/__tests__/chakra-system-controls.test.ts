@@ -18,10 +18,14 @@ describe("switch slot recipe", () => {
         expect(solid.control._checked.bg).toBe("var(--accent)");
     });
 
-    it("gives the unchecked track a visible surface and border", () => {
+    it("gives the unchecked track a visible surface and an inset ring", () => {
         expect(solid.control.bg).toBe("var(--surface-active)");
-        expect(solid.control.borderWidth).toBe("1px");
-        expect(solid.control.borderColor).toBe("var(--border)");
+        expect(solid.control.boxShadow).toBe("inset 0 0 0 1px var(--border)");
+        expect(solid.control.borderWidth).toBeUndefined();
+    });
+
+    it("keeps the checked ring in the accent so the thumb travel stays symmetric", () => {
+        expect(solid.control._checked.boxShadow).toBe("inset 0 0 0 1px var(--accent)");
     });
 
     it("keeps the knob readable against both track states", () => {

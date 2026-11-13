@@ -3,6 +3,7 @@ import {
     estimateEditorHeight,
     getCompletedRanges,
     getPreviewIndex,
+    rangesFromIndices,
     hexToRgb,
     normalizeHexColor,
     toMonacoColor,
@@ -64,6 +65,13 @@ describe("estimateEditorHeight", () => {
         const content = Array.from({ length: 40 }, () => "x").join("\n");
         // round(20 * 1.55) = 31; (40 + 4) * 31 = 1364
         expect(estimateEditorHeight(content, 20)).toBe(1364);
+    });
+});
+
+describe("rangesFromIndices", () => {
+    it("merges scattered indexes and skips mistakes", () => {
+        expect(rangesFromIndices([4, 0, 1, 1], new Set([4]))).toEqual([[0, 2]]);
+        expect(rangesFromIndices([])).toEqual([]);
     });
 });
 

@@ -10,6 +10,7 @@ import LiveStats from "@/components/LiveStats";
 
 import { useDailyHeaderAction, useOverlayState } from "@/components/AppShell";
 import { SessionControlBar } from "@/components/session/SessionControlBar";
+import { VimDrillPanel } from "@/components/VimDrillPanel";
 import { SessionTopBar } from "@/components/session/SessionTopBar";
 import { CountdownOverlay } from "@/components/session/CountdownOverlay";
 
@@ -52,6 +53,28 @@ const ResultScreen = dynamic(
 const AIDrillPanel = dynamic(() => import("@/components/AIDrillPanel"), { ssr: false });
 
 export default function TypingSession() {
+    const [practice, setPractice] = useState<"type" | "vim">("type");
+    const [vimHint, setVimHint] = useState<string | null>(null);
+    const vimHintTimerRef = useRef<number | null>(null);
+
+    const showVimHint = useCallback((message: string) => {
+        setVimHint(message);
+        if (vimHintTimerRef.current !== null) {
+            window.clearTimeout(vimHintTimerRef.current);
+        }
+        vimHintTimerRef.current = window.setTimeout(() => {
+            setVimHint(null);
+            vimHintTimerRef.current = null;
+        }, 1800);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (vimHintTimerRef.current !== null) {
+                window.clearTimeout(vimHintTimerRef.current);
+            }
+        };
+    }, []);
     const [isDrillPanelOpen, setIsDrillPanelOpen] = useState(false);
     const [difficultyTransition, setDifficultyTransition] = useState<DifficultyTransition | undefined>(undefined);
     const panelContainerRef = useRef<HTMLDivElement | null>(null);
@@ -86,7 +109,6 @@ export default function TypingSession() {
         preferences,
         setSurfaceStyle: persistSurfaceStyle,
         setShowLiveStatsDuringRun,
-        setVimMode,
     } = usePreferences();
 
     const editorFontSize = preferences.fontSize;
@@ -129,6 +151,10 @@ export default function TypingSession() {
 
     // Update ref with actual reset function
     engineResetRef.current = engine.reset;
+    const vimCaretRef = useRef(0);
+    const rememberVimCaret = useCallback((offset: number) => {
+        vimCaretRef.current = offset;
+    }, []);
 
     // Every finish consumer below reads the engine's atomic final snapshot when a
     // run has ended, so persistence, achievements and the result screen can never
@@ -252,7 +278,7 @@ export default function TypingSession() {
     }, [lifecycleClearAutoAdvance, controlsHandleNextProblem]);
 
     // Keyboard Shortcuts
-    useKeyboardShortcuts({
+    const { vimSessionMode } = useKeyboardShortcuts({
         phase: engine.phase,
         vimMode: preferences.vimMode,
         problemCount: controls.problemOptions.length,
@@ -262,12 +288,15 @@ export default function TypingSession() {
         onStartEngine: engine.start,
         enableEditorFocus: focus.enableEditorFocus,
         focusEditor: focus.focusEditor,
-        setVimMode,
         setShowLiveStatsDuringRun,
         showLiveStatsDuringRun: preferences.showLiveStatsDuringRun,
         clearAutoAdvance: lifecycleClearAutoAdvance,
         onOpenAIDrill: openDrillPanel,
         isOverlayOpen,
+        practiceMode: practice === "vim" ? "vim-drill" : "type",
+        onVimHint: showVimHint,
+        readVimCaret: () => vimCaretRef.current,
+        seekVimCaret: engine.seekVimCaret,
     });
 
     // Auto Scroll
@@ -384,7 +413,7 @@ export default function TypingSession() {
                 viewport. The page follows the caret, so the numerals have to stick
                 or they scroll off the top of a long snippet. The negative margin
                 fills <main>'s padding so code cannot slide into the band above them. */}
-            {showRunningStats && (
+            {showRunningStats && practice === "type" && (
                 <Box
                     position="sticky"
                     top={0}
@@ -398,7 +427,7 @@ export default function TypingSession() {
                 </Box>
             )}
             <AnimatePresence mode="wait">
-                {engine.phase !== "finished" ? (
+                {practice === "vim" || engine.phase !== "finished" ? (
                     <m.div
                         key="session"
                         {...sessionSwapMotion}
@@ -408,7 +437,7 @@ export default function TypingSession() {
                             pixel here is a pixel of editor above the fold. */}
                         <Box display="flex" flexDirection="column" gap={{ base: 4, md: 6 }}>
                             {/* Config row (hidden during a run). Typing starts the session. */}
-                            {!focusActive && (
+                            {(practice === "vim" || !focusActive) && (
                                 <SessionControlBar
                                     language={controls.language}
                                     onLanguageChange={controls.setLanguage}
@@ -423,10 +452,18 @@ export default function TypingSession() {
                                     dueCount={sr.dueCount}
                                     suggestedDifficulty={adaptive.suggestedDifficulty}
                                     onOpenAIDrill={openDrillPanel}
+                                    practice={practice}
+                                    onPracticeChange={setPractice}
                                 />
                             )}
 
-                            {/* Main Panel Area */}
+                            {practice === "vim" ? (
+                                <VimDrillPanel
+                                    fontSize={editorFontSize}
+                                    surfaceStyle={effectiveSurfaceStyle}
+                                    syntaxHighlighting={preferences.syntaxHighlighting}
+                                />
+                            ) : (
                             <Stack w="100%" gap={layoutGap} align="center">
                                 <Box w="100%" position="relative">
                                     <m.div
@@ -464,6 +501,10 @@ export default function TypingSession() {
                                                     fontSize={editorFontSize}
                                                     surfaceStyle={effectiveSurfaceStyle}
                                                     syntaxHighlighting={preferences.syntaxHighlighting}
+                                                    vimSessionMode={preferences.vimMode ? vimSessionMode : "normal"}
+                                                    vimHint={vimHint}
+                                                    freeTyped={preferences.vimMode ? engine.settledChars : undefined}
+                                                    onVimCaret={rememberVimCaret}
                                                 />
                                             </Box>
 
@@ -485,6 +526,7 @@ export default function TypingSession() {
                                     />
                                 </Box>
                             </Stack>
+                            )}
                         </Box>
                     </m.div>
                 ) : (

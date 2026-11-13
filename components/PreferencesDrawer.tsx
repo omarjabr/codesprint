@@ -371,7 +371,7 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                                     />
                                     <ToggleRow
                                         label="Vim mode"
-                                        hint="Enable Vim keybindings"
+                                        hint="Normal moves the caret anywhere. Insert types the character under it. Escape leaves Insert"
                                         checked={preferences.vimMode}
                                         onChange={setVimMode}
                                     />

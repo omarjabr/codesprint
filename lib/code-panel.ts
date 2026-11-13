@@ -127,6 +127,25 @@ export function getCompletedRanges(
     return ranges;
 }
 
+/** Merge scattered typed indexes into decoration ranges, skipping mistakes. */
+export function rangesFromIndices(
+    indices: readonly number[],
+    wrong: ReadonlySet<number> = new Set<number>(),
+): [number, number][] {
+    const sorted = [...indices].filter((index) => !wrong.has(index)).sort((a, b) => a - b);
+    const ranges: [number, number][] = [];
+    for (const index of sorted) {
+        const last = ranges[ranges.length - 1];
+        if (last && index < last[1]) continue;
+        if (last && last[1] === index) {
+            last[1] = index + 1;
+        } else {
+            ranges.push([index, index + 1]);
+        }
+    }
+    return ranges;
+}
+
 export function getPreviewIndex(content: string, caretIndex: number, previewChars = 12): number {
     let index = Math.max(0, Math.min(caretIndex, content.length));
     let remaining = Math.max(0, previewChars);
