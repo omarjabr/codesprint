@@ -70,7 +70,7 @@ export function Hero() {
     ].filter((entry): entry is string => entry !== null);
 
     return (
-        <Flex as="section" direction="column" gap={3} aria-label="About CodeSprint">
+        <Flex as="section" direction="column" gap={3} aria-label="About Typeloop">
             <Text as="p" fontSize="sm" color="var(--text)" lineHeight={1.5}>
                 Type real source code and get faster at the syntax you actually write.
             </Text>
@@ -122,7 +122,7 @@ export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
                         <DialogCloseButton />
                         <DialogHeader {...overlayHeaderProps}>
                             <DialogTitle fontSize="xl" fontWeight="bold" color="var(--accent)">
-                                About CodeSprint
+                                About Typeloop
                             </DialogTitle>
                         </DialogHeader>
                         <DialogBody py={4}>

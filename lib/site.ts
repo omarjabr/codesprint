@@ -7,11 +7,11 @@
  * (lib/share-card.ts).
  */
 
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://codesprint.dev";
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://typeloop.dev";
 
-export const SITE_NAME = "CodeSprint";
+export const SITE_NAME = "Typeloop";
 
-export const SITE_TITLE = "CodeSprint · Code Typing Trainer";
+export const SITE_TITLE = "Typeloop · Code Typing Trainer";
 
 export const SITE_TAGLINE = "Build real syntax muscle memory.";
 

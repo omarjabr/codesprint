@@ -141,7 +141,7 @@ function SkipToContentLink() {
             py={2}
             borderRadius="var(--radius-sm)"
             // Opaque, not the translucent --surface: over the sticky header the
-            // wordmark used to read through the link ("codesprint" as
+            // wordmark used to read through the link ("typeloop" as
             // "...esprint"). The elevation keeps it reading as a layer above.
             bg="var(--bg)"
             color="var(--text)"
@@ -447,11 +447,11 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                         flexWrap="wrap"
                     >
                         <Flex align="center" gap={{ base: 2, md: 4 }} flexShrink={0} minW={0}>
-                            <Link href="/" aria-label="CodeSprint home">
+                            <Link href="/" aria-label="Typeloop home">
                                 {/* The single h1 for the app: the home hero deliberately
                                     does not repeat the wordmark. */}
                                 <Text as="h1" fontWeight={700} fontSize={{ base: "lg", sm: "xl", md: "3xl" }} letterSpacing="0.3px">
-                                    codesprint
+                                    typeloop
                                 </Text>
                             </Link>
                             <Flex gap={{ base: 0.5, md: 2 }} align="center" flexWrap="nowrap" flexShrink={0}>
