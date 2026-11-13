@@ -509,7 +509,7 @@ export const THEME_PRESETS: Record<ThemePreset, ThemeTokens> = {
 };
 
 export const DEFAULT_PREFERENCES: PreferencesState = {
-    theme: "gruvbox",
+    theme: "catppuccinMocha",
     fontSize: 24,
     caretWidth: 3,
     countdownEnabled: false,

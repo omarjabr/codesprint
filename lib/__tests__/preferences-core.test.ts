@@ -9,7 +9,7 @@ import {
 
 describe("DEFAULT_PREFERENCES", () => {
     it("has expected default values", () => {
-        expect(DEFAULT_PREFERENCES.theme).toBe("gruvbox");
+        expect(DEFAULT_PREFERENCES.theme).toBe("catppuccinMocha");
         expect(DEFAULT_PREFERENCES.fontSize).toBe(24);
         expect(DEFAULT_PREFERENCES.caretWidth).toBe(3);
         expect(DEFAULT_PREFERENCES.countdownEnabled).toBe(false);

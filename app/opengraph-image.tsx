@@ -7,13 +7,13 @@ export const alt = `${SITE_NAME} — a code typing trainer`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-// Gruvbox, the default preset (lib/preferences-core.ts).
-const BG = "#282828";
-const BG_MUTED = "#3c3836";
-const TEXT = "#ebdbb2";
-const TEXT_SUBTLE = "#a89984";
-const ACCENT = "#d79921";
-const BORDER = "rgba(168, 153, 132, 0.28)";
+// Catppuccin Mocha, the default preset (lib/preferences-core.ts).
+const BG = "#1e1e2e";
+const BG_MUTED = "#313244";
+const TEXT = "#cdd6f4";
+const TEXT_SUBTLE = "#a6adc8";
+const ACCENT = "#cba6f7";
+const BORDER = "rgba(108, 112, 134, 0.28)";
 
 const WORDMARK = "codesprint";
 const EYEBROW = "CODE TYPING TRAINER";
@@ -74,7 +74,7 @@ export default async function OpengraphImage() {
                         flexDirection: "column",
                         borderRadius: 24,
                         border: `1px solid ${BORDER}`,
-                        background: "rgba(60, 56, 54, 0.55)",
+                        background: "rgba(49, 50, 68, 0.55)",
                         padding: "56px 60px",
                     }}
                 >
@@ -110,7 +110,7 @@ export default async function OpengraphImage() {
                             padding: "22px 28px",
                             borderRadius: 16,
                             border: `1px solid ${BORDER}`,
-                            background: "rgba(40, 40, 40, 0.75)",
+                            background: "rgba(17, 17, 27, 0.75)",
                             fontSize: 34,
                         }}
                     >

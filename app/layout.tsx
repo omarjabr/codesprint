@@ -69,7 +69,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
     width: "device-width",
     initialScale: 1,
-    // The app boots into gruvbox before any stored preference is read, so the
+    // The app boots into Catppuccin Mocha before any stored preference is read, so the
     // browser chrome matches the first paint. (Serika is the one light preset.)
     themeColor: SITE_THEME_COLOR,
     colorScheme: "dark light",

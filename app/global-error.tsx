@@ -5,14 +5,14 @@ import { useEffect } from "react";
 /**
  * Last-resort boundary: it replaces the root layout, so neither the theme
  * provider nor the app stylesheet is guaranteed to be present. Everything here
- * is inline and self-sufficient, using the gruvbox defaults the app boots with.
+ * is inline and self-sufficient, using the Catppuccin Mocha defaults the app boots with.
  */
-const BG = "#282828";
-const PANEL = "#3c3836";
-const TEXT = "#ebdbb2";
-const TEXT_SUBTLE = "#a89984";
-const ACCENT = "#d79921";
-const BORDER = "rgba(168, 153, 132, 0.3)";
+const BG = "#1e1e2e";
+const PANEL = "#313244";
+const TEXT = "#cdd6f4";
+const TEXT_SUBTLE = "#a6adc8";
+const ACCENT = "#cba6f7";
+const BORDER = "rgba(108, 112, 134, 0.3)";
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 export default function GlobalError({

@@ -1,7 +1,7 @@
 import type { ButtonProps } from "@chakra-ui/react";
 import { compositeOver, contrastRatio, relativeLuminance } from "@/lib/contrast";
 import { MOTION_DURATION } from "@/lib/motion";
-import { THEME_PRESETS, type ThemePreset } from "@/lib/preferences-core";
+import { DEFAULT_PREFERENCES, THEME_PRESETS, type ThemePreset } from "@/lib/preferences-core";
 
 /**
  * CSS variable references for session styling
@@ -105,7 +105,7 @@ export function getAccentButtonPalette(theme: ThemePreset): AccentButtonPalette 
     const cached = accentPaletteCache.get(theme);
     if (cached) return cached;
 
-    const tokens = THEME_PRESETS[theme] ?? THEME_PRESETS.gruvbox;
+    const tokens = THEME_PRESETS[theme] ?? THEME_PRESETS[DEFAULT_PREFERENCES.theme];
     const fill = tokens.accent;
     const label = deriveLabel(tokens.bg, tokens.text, [fill]);
     const awayFromLabel = relativeLuminance(label) >= relativeLuminance(fill) ? EXTREMES[1] : EXTREMES[0];
