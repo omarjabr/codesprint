@@ -271,7 +271,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         progressSummary={progressSummary}
                         dailyAction={dailyAction}
                     />
-                    <Container as="main" id="main" maxW="1280px" flex="1 1 auto" pt={{ base: 3, md: 5 }} pb={8} px={{ base: 4, lg: 10 }}>
+                    <Container as="main" id="main" maxW="1280px" flex="1 1 auto" pt={{ base: 3, md: 5 }} pb={8} px={{ base: 4, lg: 0 }}>
                         {children}
                     </Container>
                 </Flex>
@@ -434,7 +434,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
             backdropFilter="blur(18px)"
         >
             <m.div {...headerMotion}>
-                <Container maxW="1280px" px={{ base: 4, md: 8 }} py={{ base: 2, md: 3 }}>
+                <Container maxW="1280px" px={{ base: 4, lg: 0 }} py={{ base: 2, md: 3 }}>
                     {/* One row at every width. Stacked, this header ate 165px of a
                         390x844 screen and pushed the editor clean below the fold,
                         so on phones the wordmark shrinks, the level meter stands
