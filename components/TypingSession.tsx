@@ -379,6 +379,24 @@ export default function TypingSession() {
 
     return (
         <Box position="relative" minH="400px">
+            {/* Outside the session motion wrappers: those keep a transform, and a
+                transformed ancestor would pin this to the document instead of the
+                viewport. The page follows the caret, so the numerals have to stick
+                or they scroll off the top of a long snippet. The negative margin
+                fills <main>'s padding so code cannot slide into the band above them. */}
+            {showRunningStats && (
+                <Box
+                    position="sticky"
+                    top={0}
+                    zIndex={20}
+                    mt={{ base: -3, md: -5 }}
+                    pt={{ base: 3, md: 5 }}
+                    pb={4}
+                    background="var(--bg-gradient) no-repeat fixed"
+                >
+                    <LiveStats wpm={engine.metrics.adjustedWpm} accuracy={engine.metrics.accuracy} />
+                </Box>
+            )}
             <AnimatePresence mode="wait">
                 {engine.phase !== "finished" ? (
                     <m.div
@@ -430,11 +448,6 @@ export default function TypingSession() {
                                                 problemCount={controls.problemOptions.length}
                                                 onNextProblem={handleNextProblem}
                                             />
-
-                                            {/* Live stats span the code column: labels at the edges, no card. */}
-                                            {showRunningStats && (
-                                                <LiveStats wpm={engine.metrics.adjustedWpm} accuracy={engine.metrics.accuracy} />
-                                            )}
 
                                             {/* Code Panel — reserve the editor's real height so the
                                                 dynamic-import loading placeholder does not cause a mount-time jump. */}
